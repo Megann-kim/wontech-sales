@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>원텍영업관리</title>
+<style>
+  :root{
+    --blue:#2563eb; --blue-dark:#1d4ed8; --bg:#f4f6f9; --card:#ffffff;
+    --text:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --green:#16a34a; --amber:#d97706; --red:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:24px;height:56px;position:sticky;top:0;z-index:10;}
+  header h1{font-size:17px;font-weight:700;margin:0;color:var(--blue-dark);white-space:nowrap;}
+  nav{display:flex;gap:4px;}
+  nav button{border:none;background:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--muted);font-weight:600;}
+  nav button.active{background:var(--blue);color:#fff;}
+  nav button:hover:not(.active){background:#eef2ff;}
+  main{max-width:1160px;margin:0 auto;padding:24px;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+  .card .label{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px;}
+  .card .value{font-size:24px;font-weight:800;}
+  .card .sub{font-size:12px;color:var(--muted);margin-top:4px;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px;}
+  .panel h2{font-size:15px;margin:0 0 14px;}
+  .progress-bar{height:10px;background:#e5e7eb;border-radius:6px;overflow:hidden;margin-top:8px;}
+  .progress-fill{height:100%;background:var(--blue);border-radius:6px;transition:width .3s;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:600;font-size:12px;}
+  tr:hover td{background:#f9fafb;}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
+  .toolbar .filters{display:flex;gap:6px;}
+  .toolbar select,.toolbar input[type=text]{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;}
+  button.primary{background:var(--blue);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  button.primary:hover{background:var(--blue-dark);}
+  button.ghost{background:none;border:1px solid var(--border);padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer;color:var(--muted);}
+  button.ghost:hover{background:#f3f4f6;}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+  .badge.견적{background:#eef2ff;color:var(--blue-dark);}
+  .badge.수주{background:#ecfdf5;color:var(--green);}
+  .badge.완료{background:#f3f4f6;color:#374151;}
+  .badge.실패{background:#fef2f2;color:var(--red);}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:100;}
+  .modal-backdrop.show{display:flex;}
+  .modal{background:#fff;border-radius:14px;padding:22px;width:420px;max-width:92vw;max-height:88vh;overflow:auto;}
+  .modal h3{margin:0 0 16px;font-size:16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600;}
+  .field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .empty{text-align:center;color:var(--muted);padding:40px 0;font-size:13px;}
+  .row-actions{display:flex;gap:6px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>원텍영업관리</h1>
+  <nav id="nav">
+    <button data-view="dash" class="active">대시보드</button>
+    <button data-view="deals">견적/수주</button>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3 id="modalTitle">견적 추가</h3>
+    <div class="field"><label>거래처</label><input id="f_company" type="text" placeholder="거래처명"></div>
+    <div class="field"><label>담당자</label><input id="f_contact" type="text" placeholder="담당자명"></div>
+    <div class="field"><label>품목</label><input id="f_item" type="text" placeholder="품목/내용"></div>
+    <div class="field"><label>금액(원)</label><input id="f_amount" type="text" inputmode="numeric" placeholder="0"></div>
+    <div class="field"><label>상태</label>
+      <select id="f_stage">
+        <option value="견적">견적</option>
+        <option value="수주">수주</option>
+        <option value="완료">완료</option>
+        <option value="실패">실패</option>
+      </select>
+    </div>
+    <div class="field"><label>날짜</label><input id="f_date" type="date"></div>
+    <div class="field"><label>메모</label><textarea id="f_memo" rows="2" placeholder="메모"></textarea></div>
+    <div class="modal-actions">
+      <button class="ghost" id="btnCancel">취소</button>
+      <button class="primary" id="btnSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const STORAGE_KEY = "wontech_sales_data";
+
+  function loadData(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { deals: [], targets: {} };
+  }
+  function saveData(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  let state = loadData();
+  let view = "dash";
+  let editingId = null;
+  let dealFilter = "전체";
+
+  const fmtWon = n => (Number(n)||0).toLocaleString("ko-KR") + "원";
+  const monthKey = d => d.slice(0,7);
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+  function computeStats(){
+    const dealsThisMonth = state.deals.filter(d => monthKey(d.date) === thisMonth);
+    const wonAmount = dealsThisMonth
+      .filter(d => d.stage === "수주" || d.stage === "완료")
+      .reduce((s,d) => s + Number(d.amount||0), 0);
+    const target = Number(state.targets[thisMonth] || 0);
+    const rate = target > 0 ? Math.min(100, Math.round(wonAmount/target*100)) : 0;
+    const openQuotes = state.deals.filter(d => d.stage === "견적").length;
+    const closedCount = dealsThisMonth.filter(d => ["수주","완료","실패"].includes(d.stage)).length;
+    const wonCount = dealsThisMonth.filter(d => ["수주","완료"].includes(d.stage)).length;
+    const convRate = closedCount > 0 ? Math.round(wonCount/closedCount*100) : 0;
+    return { wonAmount, target, rate, openQuotes, convRate };
+  }
+
+  function render(){
+    document.querySelectorAll("#nav button").forEach(b=>{
+      b.classList.toggle("active", b.dataset.view === view);
+    });
+    const app = document.getElementById("app");
+    app.innerHTML = view === "dash" ? renderDash() : renderDeals();
+    bindViewEvents();
+  }
+
+  function renderDash(){
+    const s = computeStats();
+    return `
+      <div class="cards">
+        <div class="card">
+          <div class="label">이번 달 수주 금액</div>
+          <div class="value">${fmtWon(s.wonAmount)}</div>
+          <div class="sub">목표 ${fmtWon(s.target)}</div>
+        </div>
+        <div class="card">
+          <div class="label">목표 달성률</div>
+          <div class="value">${s.rate}%</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${s.rate}%"></div></div>
+        </div>
+        <div class="card">
+          <div class="label">진행중 견적</div>
+          <div class="value">${s.openQuotes}건</div>
+          <div class="sub">아직 수주/실패 처리 전</div>
+        </div>
+        <div class="card">
+          <div class="label">수주 전환율</div>
+          <div class="value">${s.convRate}%</div>
+          <div class="sub">이번 달 마감 건 기준</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>이번 달 목표 설정</h2>
+        <div class="field" style="max-width:260px;">
+          <label>${thisMonth} 목표 금액(원)</label>
+          <input id="targetInput" type="text" inputmode="numeric" value="${state.targets[thisMonth]||""}" placeholder="예: 100000000">
+        </div>
+        <button class="primary" id="btnSaveTarget">저장</button>
+      </div>
+      <div class="panel">
+        <h2>최근 견적/수주</h2>
+        ${renderDealsTable(state.deals.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8), false)}
+      </div>
+    `;
+  }
+
+  function renderDeals(){
+    const stages = ["전체","견적","수주","완료","실패"];
+    const filtered = dealFilter === "전체" ? state.deals : state.deals.filter(d=>d.stage===dealFilter);
+    const sorted = filtered.slice().sort((a,b)=>b.date.localeCompare(a.date));
+    return `
+      <div class="panel">
+        <div class="toolbar">
+          <div class="filters">
+            ${stages.map(s=>`<button class="ghost${dealFilter===s?' active-filter':''}" data-filter="${s}" style="${dealFilter===s?'background:#eef2ff;color:var(--blue-dark);border-color:var(--blue);':''}">${s}</button>`).join("")}
+          </div>
+          <button class="primary" id="btnAddDeal">+ 새 견적/수주</button>
+        </div>
+        ${renderDealsTable(sorted, true)}
+      </div>
+    `;
+  }
+
+  function renderDealsTable(list, withActions){
+    if(list.length === 0) return `<div class="empty">데이터가 없습니다.</div>`;
+    return `
+      <table>
+        <thead><tr>
+          <th>날짜</th><th>거래처</th><th>담당자</th><th>품목</th><th>금액</th><th>상태</th>${withActions?'<th></th>':''}
+        </tr></thead>
+        <tbody>
+          ${list.map(d => `
+            <tr>
+              <td>${d.date||""}</td>
+              <td>${escapeHtml(d.company)}</td>
+              <td>${escapeHtml(d.contact)}</td>
+              <td>${escapeHtml(d.item)}</td>
+              <td>${fmtWon(d.amount)}</td>
+              <td><span class="badge ${d.stage}">${d.stage}</span></td>
+              ${withActions ? `<td class="row-actions">
+                <button class="ghost" data-edit="${d.id}">수정</button>
+                <button class="ghost" data-del="${d.id}">삭제</button>
+              </td>` : ''}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function escapeHtml(str){
+    return String(str||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function bindViewEvents(){
+    document.getElementById("btnAddDeal")?.addEventListener("click", () => openModal());
+    document.getElementById("btnSaveTarget")?.addEventListener("click", () => {
+      const val = document.getElementById("targetInput").value.replace(/[^\d]/g,"");
+      state.targets[thisMonth] = Number(val)||0;
+      saveData(); render();
+    });
+    document.querySelectorAll("[data-filter]").forEach(b=>{
+      b.addEventListener("click", () => { dealFilter = b.dataset.filter; render(); });
+    });
+    document.querySelectorAll("[data-edit]").forEach(b=>{
+      b.addEventListener("click", () => openModal(b.dataset.edit));
+    });
+    document.querySelectorAll("[data-del]").forEach(b=>{
+      b.addEventListener("click", () => {
+        if(confirm("삭제하시겠습니까?")){
+          state.deals = state.deals.filter(d => d.id !== b.dataset.del);
+          saveData(); render();
+        }
+      });
+    });
+  }
+
+  function openModal(id){
+    editingId = id || null;
+    const d = id ? state.deals.find(x=>x.id===id) : null;
+    document.getElementById("modalTitle").textContent = id ? "견적/수주 수정" : "견적 추가";
+    document.getElementById("f_company").value = d ? d.company : "";
+    document.getElementById("f_contact").value = d ? d.contact : "";
+    document.getElementById("f_item").value = d ? d.item : "";
+    document.getElementById("f_amount").value = d ? d.amount : "";
+    document.getElementById("f_stage").value = d ? d.stage : "견적";
+    document.getElementById("f_date").value = d ? d.date : new Date().toISOString().slice(0,10);
+    document.getElementById("f_memo").value = d ? (d.memo||"") : "";
+    document.getElementById("modalBackdrop").classList.add("show");
+  }
+  function closeModal(){
+    document.getElementById("modalBackdrop").classList.remove("show");
+  }
+
+  document.getElementById("btnCancel").addEventListener("click", closeModal);
+  document.getElementById("modalBackdrop").addEventListener("click", (e) => {
+    if(e.target.id === "modalBackdrop") closeModal();
+  });
+  document.getElementById("btnSave").addEventListener("click", () => {
+    const company = document.getElementById("f_company").value.trim();
+    if(!company){ alert("거래처를 입력하세요."); return; }
+    const payload = {
+      company,
+      contact: document.getElementById("f_contact").value.trim(),
+      item: document.getElementById("f_item").value.trim(),
+      amount: Number(document.getElementById("f_amount").value.replace(/[^\d]/g,""))||0,
+      stage: document.getElementById("f_stage").value,
+      date: document.getElementById("f_date").value || new Date().toISOString().slice(0,10),
+      memo: document.getElementById("f_memo").value.trim(),
+    };
+    if(editingId){
+      const idx = state.deals.findIndex(d=>d.id===editingId);
+      state.deals[idx] = { ...state.deals[idx], ...payload };
+    } else {
+      state.deals.push({ id: uid(), ...payload });
+    }
+    saveData();
+    closeModal();
+    render();
+  });
+
+  document.getElementById("nav").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if(!btn) return;
+    view = btn.dataset.view;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
