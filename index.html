@@ -18,11 +18,18 @@
   nav button{border:none;background:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--muted);font-weight:600;}
   nav button.active{background:var(--blue);color:#fff;}
   nav button:hover:not(.active){background:#eef2ff;}
-  .region-block{margin-bottom:22px;}
+  .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:700px){ .order-grid{grid-template-columns:1fr;} }
+  .region-block{margin-bottom:0;min-width:0;}
+  .region-block table{font-size:12px;}
   .region-block h3{font-size:13px;font-weight:700;color:var(--blue-dark);margin:0 0 8px;}
   .total-row td{font-weight:700;background:#f9fafb;}
-  .badge.완료납품, .badge.선적완료{background:#ecfdf5;color:var(--green);}
-  .badge.미납품, .badge.미선적{background:#fffbeb;color:var(--amber);}
+  .badge.미완료{background:#fffbeb;color:var(--amber);}
+  .summary-table{font-size:12px;white-space:nowrap;}
+  .summary-table th{text-align:center;background:#f3f4f6;color:var(--text);}
+  .summary-table td{text-align:right;}
+  .summary-table td:nth-child(3){text-align:left;font-weight:600;}
+  .biz-input{width:100px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:inherit;}
   main{max-width:1160px;margin:0 auto;padding:24px;}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
@@ -103,8 +110,12 @@
     <h3 id="orderModalTitle">신규수주 추가</h3>
     <div class="field"><label>구분</label>
       <select id="o_region">
-        <option value="국내영업">국내영업</option>
+        <option value="국내영업-제품">국내영업-제품</option>
+        <option value="국내영업-소모품">국내영업-소모품</option>
         <option value="해외영업">해외영업</option>
+        <option value="Surgical">Surgical</option>
+        <option value="B2C">B2C</option>
+        <option value="고객만족">고객만족</option>
       </select>
     </div>
     <div class="field"><label>거래처명</label><input id="o_company" type="text" placeholder="거래처명"></div>
@@ -135,14 +146,20 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(raw) return JSON.parse(raw);
     }catch(e){}
-    return { deals: [], targets: {}, orders: [] };
+    return { deals: [], targets: {}, orders: [], bizTargets: {} };
   }
   function saveData(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
+  const BIZ_UNITS = ["국내영업-제품","국내영업-소모품","해외영업","Surgical","B2C","고객만족"];
+
   let state = loadData();
   if(!state.orders) state.orders = [];
+  if(!state.bizTargets) state.bizTargets = {};
+  BIZ_UNITS.forEach(u => {
+    if(!state.bizTargets[u]) state.bizTargets[u] = { prev:0, target:0, actual:0, nextPlanned:0 };
+  });
   let view = "dash";
   let editingId = null;
   let editingOrderId = null;
@@ -152,6 +169,21 @@
   const monthKey = d => d.slice(0,7);
   const thisMonth = new Date().toISOString().slice(0,7);
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+  function getMonthLabels(){
+    const now = new Date();
+    const cur = now.getMonth()+1;
+    const prev = cur === 1 ? 12 : cur-1;
+    const next = cur === 12 ? 1 : cur+1;
+    return { prev: `${prev}월`, cur: `${cur}월`, next: `${next}월` };
+  }
+
+  function unitOrderSums(unit){
+    const list = state.orders.filter(o => o.region === unit);
+    const done = list.filter(o => o.status === "완료").reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const pending = list.filter(o => o.status !== "완료").reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    return { done, pending };
+  }
 
   function computeStats(){
     const dealsThisMonth = state.deals.filter(d => monthKey(d.date) === thisMonth);
@@ -261,30 +293,111 @@
   }
 
   function renderOrders(){
-    const regions = ["국내영업","해외영업"];
     return `
+      ${renderSummaryTable()}
       <div class="panel">
         <div class="toolbar">
           <div></div>
           <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
         </div>
-        ${regions.map(r => renderOrderRegionTable(r)).join("")}
-        <div class="sub" style="color:var(--muted);font-size:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
+        <div class="order-grid">
+          ${BIZ_UNITS.map(u => renderOrderUnitTable(u)).join("")}
+        </div>
+        <div class="sub" style="color:var(--muted);font-size:12px;margin-top:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
       </div>
     `;
   }
 
-  function renderOrderRegionTable(region){
-    const list = state.orders.filter(o => o.region === region).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  function renderSummaryTable(){
+    const m = getMonthLabels();
+    const rows = BIZ_UNITS.map(u => {
+      const t = state.bizTargets[u];
+      const sums = unitOrderSums(u);
+      const expected = Number(t.actual||0) + sums.done + sums.pending;
+      const rate = Number(t.target||0) > 0 ? (expected/Number(t.target))*100 : 0;
+      const cumulative = Number(t.prev||0) + expected + Number(t.nextPlanned||0);
+      return { u, t, sums, expected, rate, cumulative };
+    });
+    const totalPrev = rows.reduce((s,r)=>s+Number(r.t.prev||0),0);
+    const totalTarget = rows.reduce((s,r)=>s+Number(r.t.target||0),0);
+    const totalActual = rows.reduce((s,r)=>s+Number(r.t.actual||0),0);
+    const totalDone = rows.reduce((s,r)=>s+r.sums.done,0);
+    const totalPending = rows.reduce((s,r)=>s+r.sums.pending,0);
+    const totalExpected = rows.reduce((s,r)=>s+r.expected,0);
+    const totalRate = totalTarget > 0 ? (totalExpected/totalTarget)*100 : 0;
+    const totalNext = rows.reduce((s,r)=>s+Number(r.t.nextPlanned||0),0);
+    const totalCumulative = rows.reduce((s,r)=>s+r.cumulative,0);
+
+    return `
+      <div class="panel">
+        <h2>사업부별 매출 및 예상 실적 (${m.cur} 기준)</h2>
+        <div style="overflow-x:auto;">
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th rowspan="2">구분</th>
+              <th rowspan="2">① ${m.prev} 누적매출</th>
+              <th rowspan="2">사업부명</th>
+              <th colspan="6">${m.cur} 매출실적</th>
+              <th rowspan="2">⑦ ${m.next} 납품(선적)예정</th>
+              <th rowspan="2">⑧ 연간 누적 예상 매출액</th>
+            </tr>
+            <tr>
+              <th>② 매출목표</th>
+              <th>③ 매출액(회계)</th>
+              <th>④ 납품(선적)</th>
+              <th>⑤ 미납품(미선적)</th>
+              <th>⑥ 예상 매출액</th>
+              <th>달성률</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r,i) => `
+              <tr>
+                ${i===0 ? `<td rowspan="${BIZ_UNITS.length}" style="text-align:center;font-weight:700;">금액</td>` : ''}
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="prev" value="${r.t.prev||0}"></td>
+                <td>${r.u}</td>
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="target" value="${r.t.target||0}"></td>
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="actual" value="${r.t.actual||0}"></td>
+                <td>${fmtWon(r.sums.done)}</td>
+                <td>${fmtWon(r.sums.pending)}</td>
+                <td>${fmtWon(r.expected)}</td>
+                <td>${Number(r.t.target||0) > 0 ? r.rate.toFixed(1)+'%' : '-'}</td>
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="nextPlanned" value="${r.t.nextPlanned||0}"></td>
+                <td>${fmtWon(r.cumulative)}</td>
+              </tr>
+            `).join("")}
+            <tr class="total-row">
+              <td>합계</td>
+              <td>${fmtWon(totalPrev)}</td>
+              <td></td>
+              <td>${fmtWon(totalTarget)}</td>
+              <td>${fmtWon(totalActual)}</td>
+              <td>${fmtWon(totalDone)}</td>
+              <td>${fmtWon(totalPending)}</td>
+              <td>${fmtWon(totalExpected)}</td>
+              <td>${totalTarget > 0 ? totalRate.toFixed(1)+'%' : '-'}</td>
+              <td>${fmtWon(totalNext)}</td>
+              <td>${fmtWon(totalCumulative)}</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="sub" style="color:var(--muted);font-size:12px;margin-top:8px;">※ ①②③⑦은 직접 입력하는 회계/목표 수치입니다. ④⑤⑥⑧, 달성률은 아래 수주관리 데이터로 자동 계산됩니다.</div>
+      </div>
+    `;
+  }
+
+  function renderOrderUnitTable(unit){
+    const list = state.orders.filter(o => o.region === unit).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const total = list.reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
-    const dateLabel = region === "국내영업" ? "납품(선적)일/예정일" : "선적일/예정일";
     return `
       <div class="region-block">
-        <h3>${region}</h3>
+        <h3>${unit}</h3>
         ${list.length === 0 ? `<div class="empty">등록된 수주가 없습니다.</div>` : `
         <table>
           <thead><tr>
-            <th>거래처명</th><th>제품명</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>${dateLabel}</th><th></th>
+            <th>거래처명</th><th>제품명</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>납품(선적)일/예정일</th><th></th>
           </tr></thead>
           <tbody>
             ${list.map(o => `
@@ -294,7 +407,7 @@
                 <td>${Number(o.qty||0).toLocaleString("ko-KR")}</td>
                 <td>${fmtWon(o.price)}</td>
                 <td>${fmtWon(Number(o.qty||0)*Number(o.price||0))}</td>
-                <td><span class="badge ${o.status==='완료' ? (region==='국내영업'?'완료납품':'선적완료') : (region==='국내영업'?'미납품':'미선적')}">${o.status==='완료' ? '완료' : '미완료'}</span></td>
+                <td><span class="badge ${o.status==='완료' ? '완료' : '미완료'}">${o.status==='완료' ? '완료' : '미완료'}</span></td>
                 <td>${o.date||""}</td>
                 <td class="row-actions">
                   <button class="ghost" data-order-edit="${o.id}">수정</button>
@@ -347,6 +460,14 @@
         }
       });
     });
+    document.querySelectorAll(".biz-input").forEach(inp=>{
+      inp.addEventListener("change", () => {
+        const unit = inp.dataset.biz;
+        const field = inp.dataset.field;
+        state.bizTargets[unit][field] = Number(inp.value.replace(/[^\d]/g,""))||0;
+        saveData(); render();
+      });
+    });
   }
 
   function openModal(id){
@@ -396,7 +517,7 @@
   function updateOrderDateLabel(){
     const region = document.getElementById("o_region").value;
     const status = document.getElementById("o_status").value;
-    const verb = region === "국내영업" ? "납품" : "선적";
+    const verb = region === "해외영업" ? "선적" : "납품";
     document.getElementById("o_dateLabel").textContent = status === "완료" ? `${verb}일` : `${verb}예정일`;
   }
 
@@ -404,7 +525,7 @@
     editingOrderId = id || null;
     const o = id ? state.orders.find(x=>x.id===id) : null;
     document.getElementById("orderModalTitle").textContent = id ? "신규수주 수정" : "신규수주 추가";
-    document.getElementById("o_region").value = o ? o.region : "국내영업";
+    document.getElementById("o_region").value = o ? o.region : "국내영업-제품";
     document.getElementById("o_company").value = o ? o.company : "";
     document.getElementById("o_item").value = o ? o.item : "";
     document.getElementById("o_qty").value = o ? o.qty : "";
