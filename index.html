@@ -23,6 +23,8 @@
   .region-block{margin-bottom:0;min-width:0;}
   .region-block table{font-size:12px;}
   .region-block h3{font-size:13px;font-weight:700;color:var(--blue-dark);margin:0 0 8px;}
+  .month-group-title{font-size:16px;font-weight:800;margin:16px 0 8px;color:var(--text);}
+  .month-group-title:first-of-type{margin-top:0;}
   .total-row td{font-weight:700;background:#f9fafb;}
   .badge.미완료{background:#fffbeb;color:var(--amber);}
   .summary-table{font-size:12px;white-space:nowrap;}
@@ -455,39 +457,57 @@
     `;
   }
 
+  function monthGroupKey(dateStr){
+    return dateStr && dateStr.length >= 7 ? dateStr.slice(0,7) : "";
+  }
+
+  function monthGroupLabel(key){
+    if(!key) return "날짜 미정";
+    const m = Number(key.slice(5,7));
+    return `${m}월 수주내역`;
+  }
+
+  function renderOrderMonthTable(monthOrders){
+    const total = monthOrders.reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    return `
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>거래처명</th><th>제품명</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>납품(선적)일/예정일</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${monthOrders.map(o => `
+            <tr>
+              <td>${escapeHtml(o.company)}</td>
+              <td>${escapeHtml(o.item)}</td>
+              <td>${Number(o.qty||0).toLocaleString("ko-KR")}</td>
+              <td>${fmtWon(o.price)}</td>
+              <td>${fmtWon(Number(o.qty||0)*Number(o.price||0))}</td>
+              <td><span class="badge ${o.status==='완료' ? '완료' : '미완료'}">${o.status==='완료' ? '완료' : '미완료'}</span></td>
+              <td>${o.date||""}</td>
+              <td class="row-actions">
+                <button class="ghost" data-order-edit="${o.id}">수정</button>
+                <button class="ghost" data-order-del="${o.id}">삭제</button>
+              </td>
+            </tr>
+          `).join("")}
+          <tr class="total-row"><td colspan="4">합계</td><td>${fmtWon(total)}</td><td colspan="3"></td></tr>
+        </tbody>
+      </table>
+      </div>
+    `;
+  }
+
   function renderOrderUnitTable(unit){
     const list = state.orders.filter(o => o.region === unit).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-    const total = list.reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const monthKeys = [...new Set(list.map(o => monthGroupKey(o.date)))].sort((a,b)=>a.localeCompare(b));
     return `
       <div class="region-block">
         <h3>${unit}</h3>
-        ${list.length === 0 ? `<div class="empty">등록된 수주가 없습니다.</div>` : `
-        <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>거래처명</th><th>제품명</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>납품(선적)일/예정일</th><th></th>
-          </tr></thead>
-          <tbody>
-            ${list.map(o => `
-              <tr>
-                <td>${escapeHtml(o.company)}</td>
-                <td>${escapeHtml(o.item)}</td>
-                <td>${Number(o.qty||0).toLocaleString("ko-KR")}</td>
-                <td>${fmtWon(o.price)}</td>
-                <td>${fmtWon(Number(o.qty||0)*Number(o.price||0))}</td>
-                <td><span class="badge ${o.status==='완료' ? '완료' : '미완료'}">${o.status==='완료' ? '완료' : '미완료'}</span></td>
-                <td>${o.date||""}</td>
-                <td class="row-actions">
-                  <button class="ghost" data-order-edit="${o.id}">수정</button>
-                  <button class="ghost" data-order-del="${o.id}">삭제</button>
-                </td>
-              </tr>
-            `).join("")}
-            <tr class="total-row"><td colspan="4">합계</td><td>${fmtWon(total)}</td><td colspan="3"></td></tr>
-          </tbody>
-        </table>
-        </div>
-        `}
+        ${list.length === 0 ? `<div class="empty">등록된 수주가 없습니다.</div>` : monthKeys.map(key => `
+          <div class="month-group-title">&lt;${monthGroupLabel(key)}&gt;</div>
+          ${renderOrderMonthTable(list.filter(o => monthGroupKey(o.date) === key))}
+        `).join("")}
       </div>
     `;
   }
