@@ -18,6 +18,11 @@
   nav button{border:none;background:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--muted);font-weight:600;}
   nav button.active{background:var(--blue);color:#fff;}
   nav button:hover:not(.active){background:#eef2ff;}
+  .region-block{margin-bottom:22px;}
+  .region-block h3{font-size:13px;font-weight:700;color:var(--blue-dark);margin:0 0 8px;}
+  .total-row td{font-weight:700;background:#f9fafb;}
+  .badge.완료납품, .badge.선적완료{background:#ecfdf5;color:var(--green);}
+  .badge.미납품, .badge.미선적{background:#fffbeb;color:var(--amber);}
   main{max-width:1160px;margin:0 auto;padding:24px;}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
@@ -63,6 +68,7 @@
   <nav id="nav">
     <button data-view="dash" class="active">대시보드</button>
     <button data-view="deals">견적/수주</button>
+    <button data-view="orders">수주관리</button>
   </nav>
 </header>
 
@@ -92,6 +98,33 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="orderModalBackdrop">
+  <div class="modal">
+    <h3 id="orderModalTitle">신규수주 추가</h3>
+    <div class="field"><label>구분</label>
+      <select id="o_region">
+        <option value="국내영업">국내영업</option>
+        <option value="해외영업">해외영업</option>
+      </select>
+    </div>
+    <div class="field"><label>거래처명</label><input id="o_company" type="text" placeholder="거래처명"></div>
+    <div class="field"><label>제품명</label><input id="o_item" type="text" placeholder="제품명"></div>
+    <div class="field"><label>수량</label><input id="o_qty" type="text" inputmode="numeric" placeholder="0"></div>
+    <div class="field"><label>단가(원)</label><input id="o_price" type="text" inputmode="numeric" placeholder="0"></div>
+    <div class="field"><label>상태</label>
+      <select id="o_status">
+        <option value="예정">미납품(미선적)</option>
+        <option value="완료">납품(선적)완료</option>
+      </select>
+    </div>
+    <div class="field"><label id="o_dateLabel">납품(선적)예정일</label><input id="o_date" type="date"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="btnOrderCancel">취소</button>
+      <button class="primary" id="btnOrderSave">저장</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -102,15 +135,17 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(raw) return JSON.parse(raw);
     }catch(e){}
-    return { deals: [], targets: {} };
+    return { deals: [], targets: {}, orders: [] };
   }
   function saveData(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
   let state = loadData();
+  if(!state.orders) state.orders = [];
   let view = "dash";
   let editingId = null;
+  let editingOrderId = null;
   let dealFilter = "전체";
 
   const fmtWon = n => (Number(n)||0).toLocaleString("ko-KR") + "원";
@@ -137,7 +172,7 @@
       b.classList.toggle("active", b.dataset.view === view);
     });
     const app = document.getElementById("app");
-    app.innerHTML = view === "dash" ? renderDash() : renderDeals();
+    app.innerHTML = view === "dash" ? renderDash() : view === "deals" ? renderDeals() : renderOrders();
     bindViewEvents();
   }
 
@@ -225,6 +260,56 @@
     `;
   }
 
+  function renderOrders(){
+    const regions = ["국내영업","해외영업"];
+    return `
+      <div class="panel">
+        <div class="toolbar">
+          <div></div>
+          <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
+        </div>
+        ${regions.map(r => renderOrderRegionTable(r)).join("")}
+        <div class="sub" style="color:var(--muted);font-size:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
+      </div>
+    `;
+  }
+
+  function renderOrderRegionTable(region){
+    const list = state.orders.filter(o => o.region === region).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const total = list.reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const dateLabel = region === "국내영업" ? "납품(선적)일/예정일" : "선적일/예정일";
+    return `
+      <div class="region-block">
+        <h3>${region}</h3>
+        ${list.length === 0 ? `<div class="empty">등록된 수주가 없습니다.</div>` : `
+        <table>
+          <thead><tr>
+            <th>거래처명</th><th>제품명</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>${dateLabel}</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${list.map(o => `
+              <tr>
+                <td>${escapeHtml(o.company)}</td>
+                <td>${escapeHtml(o.item)}</td>
+                <td>${Number(o.qty||0).toLocaleString("ko-KR")}</td>
+                <td>${fmtWon(o.price)}</td>
+                <td>${fmtWon(Number(o.qty||0)*Number(o.price||0))}</td>
+                <td><span class="badge ${o.status==='완료' ? (region==='국내영업'?'완료납품':'선적완료') : (region==='국내영업'?'미납품':'미선적')}">${o.status==='완료' ? '완료' : '미완료'}</span></td>
+                <td>${o.date||""}</td>
+                <td class="row-actions">
+                  <button class="ghost" data-order-edit="${o.id}">수정</button>
+                  <button class="ghost" data-order-del="${o.id}">삭제</button>
+                </td>
+              </tr>
+            `).join("")}
+            <tr class="total-row"><td colspan="4">합계</td><td>${fmtWon(total)}</td><td colspan="3"></td></tr>
+          </tbody>
+        </table>
+        `}
+      </div>
+    `;
+  }
+
   function escapeHtml(str){
     return String(str||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
@@ -246,6 +331,18 @@
       b.addEventListener("click", () => {
         if(confirm("삭제하시겠습니까?")){
           state.deals = state.deals.filter(d => d.id !== b.dataset.del);
+          saveData(); render();
+        }
+      });
+    });
+    document.getElementById("btnAddOrder")?.addEventListener("click", () => openOrderModal());
+    document.querySelectorAll("[data-order-edit]").forEach(b=>{
+      b.addEventListener("click", () => openOrderModal(b.dataset.orderEdit));
+    });
+    document.querySelectorAll("[data-order-del]").forEach(b=>{
+      b.addEventListener("click", () => {
+        if(confirm("삭제하시겠습니까? (매출처리 완료된 건은 삭제 후 일매출일보에 반영하세요)")){
+          state.orders = state.orders.filter(o => o.id !== b.dataset.orderDel);
           saveData(); render();
         }
       });
@@ -293,6 +390,60 @@
     }
     saveData();
     closeModal();
+    render();
+  });
+
+  function updateOrderDateLabel(){
+    const region = document.getElementById("o_region").value;
+    const status = document.getElementById("o_status").value;
+    const verb = region === "국내영업" ? "납품" : "선적";
+    document.getElementById("o_dateLabel").textContent = status === "완료" ? `${verb}일` : `${verb}예정일`;
+  }
+
+  function openOrderModal(id){
+    editingOrderId = id || null;
+    const o = id ? state.orders.find(x=>x.id===id) : null;
+    document.getElementById("orderModalTitle").textContent = id ? "신규수주 수정" : "신규수주 추가";
+    document.getElementById("o_region").value = o ? o.region : "국내영업";
+    document.getElementById("o_company").value = o ? o.company : "";
+    document.getElementById("o_item").value = o ? o.item : "";
+    document.getElementById("o_qty").value = o ? o.qty : "";
+    document.getElementById("o_price").value = o ? o.price : "";
+    document.getElementById("o_status").value = o ? o.status : "예정";
+    document.getElementById("o_date").value = o ? (o.date||"") : "";
+    updateOrderDateLabel();
+    document.getElementById("orderModalBackdrop").classList.add("show");
+  }
+  function closeOrderModal(){
+    document.getElementById("orderModalBackdrop").classList.remove("show");
+  }
+
+  document.getElementById("o_region").addEventListener("change", updateOrderDateLabel);
+  document.getElementById("o_status").addEventListener("change", updateOrderDateLabel);
+  document.getElementById("btnOrderCancel").addEventListener("click", closeOrderModal);
+  document.getElementById("orderModalBackdrop").addEventListener("click", (e) => {
+    if(e.target.id === "orderModalBackdrop") closeOrderModal();
+  });
+  document.getElementById("btnOrderSave").addEventListener("click", () => {
+    const company = document.getElementById("o_company").value.trim();
+    if(!company){ alert("거래처명을 입력하세요."); return; }
+    const payload = {
+      region: document.getElementById("o_region").value,
+      company,
+      item: document.getElementById("o_item").value.trim(),
+      qty: Number(document.getElementById("o_qty").value.replace(/[^\d]/g,""))||0,
+      price: Number(document.getElementById("o_price").value.replace(/[^\d]/g,""))||0,
+      status: document.getElementById("o_status").value,
+      date: document.getElementById("o_date").value || "",
+    };
+    if(editingOrderId){
+      const idx = state.orders.findIndex(o=>o.id===editingOrderId);
+      state.orders[idx] = { ...state.orders[idx], ...payload };
+    } else {
+      state.orders.push({ id: uid(), ...payload });
+    }
+    saveData();
+    closeOrderModal();
     render();
   });
 
