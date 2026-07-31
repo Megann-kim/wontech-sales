@@ -161,6 +161,45 @@
     "B2C": { prev: -41112419, target: 5025000, actual: 992718, nextPlanned: 0 },
     "고객만족": { prev: 1316506043, target: 191666667, actual: 76415688, nextPlanned: 0 },
   };
+  const ORDER_SAMPLE = [
+    { region:"국내영업-소모품", company:"원텍몰", item:"Oligio Face Tip", qty:130, price:250000, status:"완료", date:"2026-07-01" },
+    { region:"국내영업-소모품", company:"원텍몰", item:"Oligio Eye Tip", qty:25, price:250000, status:"완료", date:"2026-07-01" },
+    { region:"국내영업-소모품", company:"원텍몰", item:"Oligio X Face Tip", qty:35, price:400000, status:"완료", date:"2026-07-01" },
+    { region:"국내영업-소모품", company:"원텍몰", item:"Oligio X Eye Tip", qty:5, price:400000, status:"완료", date:"2026-07-01" },
+    { region:"국내영업-제품", company:"스노우의원 용인", item:"Avvio", qty:1, price:29090909, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"해피의원 연산점", item:"Oligio", qty:1, price:40000000, status:"완료", date:"2026-07-29" },
+    { region:"국내영업-제품", company:"라미체성형외과", item:"Pastelle Pro", qty:1, price:31818182, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"라미체성형외과", item:"Avvio", qty:1, price:29090909, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"엘그레이드의원", item:"Cosjet SR", qty:1, price:24000000, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"불리비의원 원주", item:"Oligio", qty:1, price:50000000, status:"완료", date:"2026-07-29" },
+    { region:"국내영업-제품", company:"유앤아이의원 강남", item:"Oligio X", qty:1, price:80000000, status:"완료", date:"2026-07-29" },
+    { region:"국내영업-제품", company:"코함성형외과", item:"V Laser", qty:1, price:54545455, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"서울한결의원", item:"Oligio Kiss", qty:1, price:60000000, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"라인업의원 홍대", item:"Oligio", qty:1, price:40000000, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"세린의원", item:"Oligio Kiss", qty:1, price:60000000, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"연세리안의원", item:"Oligio Kiss", qty:1, price:60000000, status:"예정", date:"2026-07-31" },
+    { region:"국내영업-제품", company:"새로고침의원", item:"V Laser", qty:1, price:54545455, status:"완료", date:"2026-07-29" },
+    { region:"국내영업-제품", company:"지아이엠메스요", item:"Oligio Kiss", qty:6, price:40000000, status:"예정", date:"2026-07-31" },
+    { region:"해외영업", company:"러시아/더마케어", item:"Oligio", qty:3, price:29725000, status:"완료", date:"2026-07-15" },
+    { region:"해외영업", company:"카자흐스탄/더마케어", item:"Oligio", qty:1, price:29725000, status:"완료", date:"2026-07-09" },
+    { region:"해외영업", company:"카자흐스탄/더마케어", item:"Oligio Eye Tip", qty:10, price:203000, status:"완료", date:"2026-07-09" },
+    { region:"해외영업", company:"브라질/medsystems", item:"LAVIEEN", qty:2, price:40600000, status:"완료", date:"2026-07-20" },
+    { region:"해외영업", company:"브라질/medsystems", item:"PASTELLE", qty:1, price:33350000, status:"완료", date:"2026-07-20" },
+    { region:"해외영업", company:"인도네시아/SOMETECH", item:"Oligio X Face Tip", qty:600, price:246500, status:"완료", date:"2026-07-15" },
+    { region:"해외영업", company:"인도네시아/SOMETECH", item:"Oligio X Eye Tip", qty:100, price:246500, status:"완료", date:"2026-07-15" },
+    { region:"해외영업", company:"멕시코/Tecnilasser", item:"Lavieen", qty:5, price:37700000, status:"완료", date:"2026-07-15" },
+    { region:"해외영업", company:"대만/brilliance", item:"Tightan ll", qty:10, price:7250000, status:"완료", date:"2026-07-24" },
+    { region:"해외영업", company:"대만/brilliance", item:"Majesty", qty:1, price:72500000, status:"완료", date:"2026-07-23" },
+    { region:"해외영업", company:"대만/brilliance", item:"Pastelle", qty:1, price:33350000, status:"완료", date:"2026-07-24" },
+    { region:"해외영업", company:"폴란드/Euroscalemed", item:"LAVIEEN", qty:5, price:43500000, status:"완료", date:"2026-07-23" },
+    { region:"해외영업", company:"호주/EBOS", item:"LAVIEEN", qty:1, price:36975000, status:"완료", date:"2026-07-23" },
+    { region:"해외영업", company:"호주/EBOS", item:"Pastelle Pro", qty:1, price:40600000, status:"완료", date:"2026-07-23" },
+    { region:"해외영업", company:"아랍에미리트/Lifestyle Aesthetics", item:"LAVIEEN", qty:3, price:36250000, status:"완료", date:"2026-07-28" },
+    { region:"해외영업", company:"아랍에미리트/Lifestyle Aesthetics", item:"Ultraskin Tightan", qty:10, price:8120000, status:"완료", date:"2026-07-28" },
+    { region:"해외영업", company:"미국법인", item:"Oligio X", qty:15, price:21750000, status:"완료", date:"2026-07-23" },
+    { region:"해외영업", company:"미국법인", item:"Picocare Majesty", qty:5, price:55100000, status:"완료", date:"2026-07-23" },
+    { region:"해외영업", company:"미국법인", item:"Sandro Dual", qty:3, price:58000000, status:"완료", date:"2026-07-23" },
+  ];
 
   let state = loadData();
   if(!state.orders) state.orders = [];
@@ -480,8 +519,9 @@
       });
     });
     document.getElementById("btnLoadSample")?.addEventListener("click", () => {
-      if(confirm("엑셀 요약 시트의 사업부별 매출목표·회계매출액·누적매출·익월납품예정 값을 불러와 현재 입력값을 덮어씁니다. 계속할까요?")){
+      if(confirm("엑셀 요약/일매출일보 시트의 사업부별 목표 수치와 신규수주 목록을 불러와 현재 입력값·수주 목록을 덮어씁니다. 계속할까요?")){
         BIZ_UNITS.forEach(u => { state.bizTargets[u] = { ...BIZ_SAMPLE[u] }; });
+        state.orders = ORDER_SAMPLE.map(o => ({ id: uid(), ...o }));
         saveData(); render();
       }
     });
