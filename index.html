@@ -28,7 +28,7 @@
   .summary-table{font-size:12px;white-space:nowrap;}
   .summary-table th{text-align:center;background:#f3f4f6;color:var(--text);}
   .summary-table td{text-align:right;}
-  .summary-table td:nth-child(3){text-align:left;font-weight:600;}
+  .summary-table td.biz-name{text-align:left;font-weight:600;}
   .biz-input{width:100px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:inherit;}
   main{max-width:1760px;margin:0 auto;padding:24px;}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;}
@@ -423,7 +423,7 @@
               <tr>
                 ${i===0 ? `<td rowspan="${BIZ_UNITS.length}" style="text-align:center;font-weight:700;">금액</td>` : ''}
                 <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="prev" value="${r.t.prev||0}"></td>
-                <td>${r.u}</td>
+                <td class="biz-name">${r.u}</td>
                 <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="target" value="${r.t.target||0}"></td>
                 <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="actual" value="${r.t.actual||0}"></td>
                 <td>${fmtWon(r.sums.done)}</td>
