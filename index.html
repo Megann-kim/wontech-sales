@@ -61,11 +61,14 @@
   .badge.실패{background:#fef2f2;color:var(--red);}
   .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:100;}
   .modal-backdrop.show{display:flex;}
-  .modal{background:#fff;border-radius:14px;padding:32px;width:560px;max-width:92vw;max-height:88vh;overflow:auto;}
+  .modal{background:#fff;border-radius:14px;padding:32px;width:640px;max-width:92vw;max-height:88vh;overflow:auto;}
   .modal h3{margin:0 0 22px;font-size:22px;}
   .field{margin-bottom:18px;}
   .field label{display:block;font-size:14px;color:var(--muted);margin-bottom:7px;font-weight:600;}
   .field input,.field select,.field textarea{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:inherit;}
+  .field input[readonly]{background:#f3f4f6;color:var(--muted);}
+  .field-row{display:flex;gap:12px;}
+  .field-row .field{flex:1;min-width:0;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;}
   .modal-actions button{padding:10px 20px;font-size:15px;}
   .empty{text-align:center;color:var(--muted);padding:40px 0;font-size:13px;}
@@ -125,7 +128,18 @@
     <div class="field"><label>거래처명</label><input id="o_company" type="text" placeholder="거래처명"></div>
     <div class="field"><label>제품명</label><input id="o_item" type="text" placeholder="제품명"></div>
     <div class="field"><label>수량</label><input id="o_qty" type="text" inputmode="numeric" placeholder="0"></div>
-    <div class="field"><label>단가(원)</label><input id="o_price" type="text" inputmode="numeric" placeholder="0"></div>
+    <div class="field" id="krwPriceField"><label>단가(원)</label><input id="o_price" type="text" inputmode="numeric" placeholder="0"></div>
+    <div id="usdCalc" style="display:none;">
+      <div class="field-row">
+        <div class="field"><label>달러단가($)</label><input id="o_usdPrice" type="text" inputmode="decimal" placeholder="0"></div>
+        <div class="field"><label>달러금액($)</label><input id="o_usdAmount" type="text" readonly placeholder="0"></div>
+        <div class="field"><label>원화환율</label><input id="o_exchangeRate" type="text" inputmode="decimal" placeholder="예: 1450"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>원화단가(원)</label><input id="o_krwUnitPrice" type="text" readonly placeholder="0"></div>
+        <div class="field"><label>원화금액(원)</label><input id="o_krwAmount" type="text" readonly placeholder="0"></div>
+      </div>
+    </div>
     <div class="field"><label>상태</label>
       <select id="o_status">
         <option value="예정">미납품(미선적)</option>
@@ -625,6 +639,29 @@
     document.getElementById("o_dateLabel").textContent = status === "완료" ? `${verb}일` : `${verb}예정일`;
   }
 
+  function updateUsdCalcVisibility(){
+    const isOverseas = document.getElementById("o_region").value === "해외영업";
+    document.getElementById("usdCalc").style.display = isOverseas ? "block" : "none";
+    document.getElementById("krwPriceField").style.display = isOverseas ? "none" : "block";
+  }
+
+  function num(id){
+    return Number(document.getElementById(id).value.replace(/[^\d.]/g,"")) || 0;
+  }
+
+  function recomputeUsdCalc(){
+    const qty = num("o_qty");
+    const usdPrice = num("o_usdPrice");
+    const rate = num("o_exchangeRate");
+    const usdAmount = qty * usdPrice;
+    const krwUnitPrice = usdPrice * rate;
+    const krwAmount = qty * krwUnitPrice;
+    document.getElementById("o_usdAmount").value = usdAmount ? usdAmount.toLocaleString("en-US") : "";
+    document.getElementById("o_krwUnitPrice").value = krwUnitPrice ? Math.round(krwUnitPrice).toLocaleString("ko-KR") : "";
+    document.getElementById("o_krwAmount").value = krwAmount ? Math.round(krwAmount).toLocaleString("ko-KR") : "";
+    document.getElementById("o_price").value = Math.round(krwUnitPrice) || 0;
+  }
+
   function openOrderModal(id){
     editingOrderId = id || null;
     const o = id ? state.orders.find(x=>x.id===id) : null;
@@ -634,17 +671,24 @@
     document.getElementById("o_item").value = o ? o.item : "";
     document.getElementById("o_qty").value = o ? o.qty : "";
     document.getElementById("o_price").value = o ? o.price : "";
+    document.getElementById("o_usdPrice").value = o && o.usdPrice ? o.usdPrice : "";
+    document.getElementById("o_exchangeRate").value = o && o.exchangeRate ? o.exchangeRate : "";
     document.getElementById("o_status").value = o ? o.status : "예정";
     document.getElementById("o_date").value = o ? (o.date||"") : "";
     updateOrderDateLabel();
+    updateUsdCalcVisibility();
+    recomputeUsdCalc();
     document.getElementById("orderModalBackdrop").classList.add("show");
   }
   function closeOrderModal(){
     document.getElementById("orderModalBackdrop").classList.remove("show");
   }
 
-  document.getElementById("o_region").addEventListener("change", updateOrderDateLabel);
+  document.getElementById("o_region").addEventListener("change", () => { updateOrderDateLabel(); updateUsdCalcVisibility(); recomputeUsdCalc(); });
   document.getElementById("o_status").addEventListener("change", updateOrderDateLabel);
+  ["o_qty","o_usdPrice","o_exchangeRate"].forEach(id => {
+    document.getElementById(id).addEventListener("input", recomputeUsdCalc);
+  });
   document.getElementById("btnOrderCancel").addEventListener("click", closeOrderModal);
   document.getElementById("orderModalBackdrop").addEventListener("click", (e) => {
     if(e.target.id === "orderModalBackdrop") closeOrderModal();
@@ -652,14 +696,17 @@
   document.getElementById("btnOrderSave").addEventListener("click", () => {
     const company = document.getElementById("o_company").value.trim();
     if(!company){ alert("거래처명을 입력하세요."); return; }
+    const region = document.getElementById("o_region").value;
     const payload = {
-      region: document.getElementById("o_region").value,
+      region,
       company,
       item: document.getElementById("o_item").value.trim(),
       qty: Number(document.getElementById("o_qty").value.replace(/[^\d]/g,""))||0,
       price: Number(document.getElementById("o_price").value.replace(/[^\d]/g,""))||0,
       status: document.getElementById("o_status").value,
       date: document.getElementById("o_date").value || "",
+      usdPrice: region === "해외영업" ? num("o_usdPrice") : 0,
+      exchangeRate: region === "해외영업" ? num("o_exchangeRate") : 0,
     };
     if(editingOrderId){
       const idx = state.orders.findIndex(o=>o.id===editingOrderId);
