@@ -179,6 +179,15 @@
     "B2C": { prev: -41112419, target: 5025000, actual: 992718, nextPlanned: 0 },
     "고객만족": { prev: 1316506043, target: 191666667, actual: 76415688, nextPlanned: 0 },
   };
+  // Source: 사업계획_시트잠그기 시트 176~186행, 일매출일보_v4.7_20260730.xlsx (2026-07-31 기준)
+  const ANNUAL_TARGET_2026 = {
+    "국내영업-제품": 32208181818,
+    "국내영업-소모품": 21870500000,
+    "해외영업": 141561545600,
+    "Surgical": 2100000000,
+    "B2C": 157450000,
+    "고객만족": 2300000000,
+  };
   const ORDER_SAMPLE = [
     { region:"국내영업-소모품", company:"원텍몰", item:"Oligio Face Tip", qty:130, price:250000, status:"완료", date:"2026-07-01" },
     { region:"국내영업-소모품", company:"원텍몰", item:"Oligio Eye Tip", qty:25, price:250000, status:"완료", date:"2026-07-01" },
@@ -287,9 +296,30 @@
     bindViewEvents();
   }
 
+  function renderAnnualTargetPanel(){
+    const total = BIZ_UNITS.reduce((s,u) => s + Number(ANNUAL_TARGET_2026[u]||0), 0);
+    return `
+      <div class="panel">
+        <h2>2026년 사업부별 매출 목표</h2>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>사업부명</th><th>2026년 목표 매출</th></tr></thead>
+          <tbody>
+            ${BIZ_UNITS.map(u => `
+              <tr><td>${u}</td><td>${fmtWon(ANNUAL_TARGET_2026[u]||0)}</td></tr>
+            `).join("")}
+            <tr class="total-row"><td>합계</td><td>${fmtWon(total)}</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    `;
+  }
+
   function renderDash(){
     const s = computeStats();
     return `
+      ${renderAnnualTargetPanel()}
       <div class="cards">
         <div class="card">
           <div class="label">이번 달 수주 금액</div>
