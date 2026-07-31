@@ -366,12 +366,23 @@
           <div></div>
           <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
         </div>
-        <div class="order-grid">
-          ${BIZ_UNITS.map(u => renderOrderUnitTable(u)).join("")}
-        </div>
+        ${renderOrdersByMonth()}
         <div class="sub" style="color:var(--muted);font-size:12px;margin-top:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
       </div>
     `;
+  }
+
+  function renderOrdersByMonth(){
+    const monthKeys = [...new Set(state.orders.map(o => monthGroupKey(o.date)))].sort((a,b)=>a.localeCompare(b));
+    if(monthKeys.length === 0){
+      return `<div class="order-grid">${BIZ_UNITS.map(u => renderOrderUnitBlock(u, [])).join("")}</div>`;
+    }
+    return monthKeys.map(key => `
+      <div class="month-group-title">&lt;${monthGroupLabel(key)}&gt;</div>
+      <div class="order-grid">
+        ${BIZ_UNITS.map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === key))).join("")}
+      </div>
+    `).join("");
   }
 
   function renderSummaryTable(){
@@ -498,16 +509,12 @@
     `;
   }
 
-  function renderOrderUnitTable(unit){
-    const list = state.orders.filter(o => o.region === unit).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-    const monthKeys = [...new Set(list.map(o => monthGroupKey(o.date)))].sort((a,b)=>a.localeCompare(b));
+  function renderOrderUnitBlock(unit, list){
+    const sorted = list.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     return `
       <div class="region-block">
         <h3>${unit}</h3>
-        ${list.length === 0 ? `<div class="empty">등록된 수주가 없습니다.</div>` : monthKeys.map(key => `
-          <div class="month-group-title">&lt;${monthGroupLabel(key)}&gt;</div>
-          ${renderOrderMonthTable(list.filter(o => monthGroupKey(o.date) === key))}
-        `).join("")}
+        ${sorted.length === 0 ? `<div class="empty">등록된 수주가 없습니다.</div>` : renderOrderMonthTable(sorted)}
       </div>
     `;
   }
