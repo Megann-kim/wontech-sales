@@ -256,7 +256,6 @@
   let dealFilter = "전체";
 
   const fmtWon = n => (Number(n)||0).toLocaleString("ko-KR") + "원";
-  const monthKey = d => d.slice(0,7);
   const thisMonth = new Date().toISOString().slice(0,7);
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
@@ -275,18 +274,38 @@
     return { done, pending };
   }
 
-  function computeStats(){
-    const dealsThisMonth = state.deals.filter(d => monthKey(d.date) === thisMonth);
-    const wonAmount = dealsThisMonth
-      .filter(d => d.stage === "수주" || d.stage === "완료")
-      .reduce((s,d) => s + Number(d.amount||0), 0);
-    const target = Number(state.targets[thisMonth] || 0);
-    const rate = target > 0 ? Math.min(100, Math.round(wonAmount/target*100)) : 0;
-    const openQuotes = state.deals.filter(d => d.stage === "견적").length;
-    const closedCount = dealsThisMonth.filter(d => ["수주","완료","실패"].includes(d.stage)).length;
-    const wonCount = dealsThisMonth.filter(d => ["수주","완료"].includes(d.stage)).length;
-    const convRate = closedCount > 0 ? Math.round(wonCount/closedCount*100) : 0;
-    return { wonAmount, target, rate, openQuotes, convRate };
+  function currentMonthIndex(){
+    return new Date().getMonth();
+  }
+
+  function monthlyTargetByUnit(unit){
+    return Number((ANNUAL_TARGET_2026[unit]||[])[currentMonthIndex()]||0);
+  }
+
+  function computeOrderStats(){
+    const target = BIZ_UNITS.reduce((s,u) => s + monthlyTargetByUnit(u), 0);
+    const ordersThisMonth = state.orders.filter(o => monthGroupKey(o.date) === thisMonth);
+    const wonAmount = ordersThisMonth
+      .filter(o => o.status === "완료")
+      .reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const rate = target > 0 ? Math.round(wonAmount/target*100) : 0;
+    const pendingCount = ordersThisMonth.filter(o => o.status !== "완료").length;
+    const totalCount = ordersThisMonth.length;
+    const doneCount = totalCount - pendingCount;
+    const convRate = totalCount > 0 ? Math.round(doneCount/totalCount*100) : 0;
+    return { wonAmount, target, rate, pendingCount, convRate };
+  }
+
+  function computeDailyDelta(){
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0,10);
+    const yesterdayStr = new Date(now.getTime() - 86400000).toISOString().slice(0,10);
+    const cumulativeAsOf = (dateStr) => state.orders
+      .filter(o => o.status === "완료" && monthGroupKey(o.date) === thisMonth && o.date && o.date <= dateStr)
+      .reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const today = cumulativeAsOf(todayStr);
+    const yesterday = cumulativeAsOf(yesterdayStr);
+    return { today, yesterday, delta: today - yesterday };
   }
 
   function render(){
@@ -359,8 +378,52 @@
     `;
   }
 
+  function renderMonthlyTargetPanel(){
+    const monthLabel = `${currentMonthIndex()+1}월`;
+    const total = BIZ_UNITS.reduce((s,u) => s + monthlyTargetByUnit(u), 0);
+    return `
+      <div class="panel">
+        <h2>이번 달(${monthLabel}) 목표 - 사업부별</h2>
+        <div class="table-scroll">
+        <table class="summary-table">
+          <thead><tr><th>사업부명</th><th>${monthLabel} 목표 매출</th></tr></thead>
+          <tbody>
+            ${BIZ_UNITS.map(u => `<tr><td class="biz-name">${u}</td><td>${fmtWon(monthlyTargetByUnit(u))}</td></tr>`).join("")}
+            <tr class="total-row"><td>합계</td><td>${fmtWon(total)}</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderDeltaPanel(){
+    const d = computeDailyDelta();
+    const sign = d.delta > 0 ? "+" : d.delta < 0 ? "-" : "";
+    const color = d.delta > 0 ? "var(--green)" : d.delta < 0 ? "var(--red)" : "var(--muted)";
+    return `
+      <div class="panel">
+        <h2>전일 대비 증감 (이번 달 누적 수주금액)</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="label">전일 누적</div>
+            <div class="value">${fmtWon(d.yesterday)}</div>
+          </div>
+          <div class="card">
+            <div class="label">금일 누적</div>
+            <div class="value">${fmtWon(d.today)}</div>
+          </div>
+          <div class="card">
+            <div class="label">증감</div>
+            <div class="value" style="color:${color};">${sign}${fmtWon(Math.abs(d.delta))}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderDash(){
-    const s = computeStats();
+    const s = computeOrderStats();
     return `
       ${renderAnnualTargetPanel()}
       <div class="cards">
@@ -372,31 +435,21 @@
         <div class="card">
           <div class="label">목표 달성률</div>
           <div class="value">${s.rate}%</div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${s.rate}%"></div></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,s.rate)}%"></div></div>
         </div>
         <div class="card">
-          <div class="label">진행중 견적</div>
-          <div class="value">${s.openQuotes}건</div>
-          <div class="sub">아직 수주/실패 처리 전</div>
+          <div class="label">미완료 수주</div>
+          <div class="value">${s.pendingCount}건</div>
+          <div class="sub">아직 매출처리 전</div>
         </div>
         <div class="card">
           <div class="label">수주 전환율</div>
           <div class="value">${s.convRate}%</div>
-          <div class="sub">이번 달 마감 건 기준</div>
+          <div class="sub">이번 달 등록 건 기준</div>
         </div>
       </div>
-      <div class="panel">
-        <h2>이번 달 목표 설정</h2>
-        <div class="field" style="max-width:260px;">
-          <label>${thisMonth} 목표 금액(원)</label>
-          <input id="targetInput" type="text" inputmode="numeric" value="${state.targets[thisMonth]||""}" placeholder="예: 100000000">
-        </div>
-        <button class="primary" id="btnSaveTarget">저장</button>
-      </div>
-      <div class="panel">
-        <h2>최근 견적/수주</h2>
-        ${renderDealsTable(state.deals.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8), false)}
-      </div>
+      ${renderMonthlyTargetPanel()}
+      ${renderDeltaPanel()}
     `;
   }
 
@@ -613,11 +666,6 @@
 
   function bindViewEvents(){
     document.getElementById("btnAddDeal")?.addEventListener("click", () => openModal());
-    document.getElementById("btnSaveTarget")?.addEventListener("click", () => {
-      const val = document.getElementById("targetInput").value.replace(/[^\d]/g,"");
-      state.targets[thisMonth] = Number(val)||0;
-      saveData(); render();
-    });
     document.querySelectorAll("[data-filter]").forEach(b=>{
       b.addEventListener("click", () => { dealFilter = b.dataset.filter; render(); });
     });
