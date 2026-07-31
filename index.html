@@ -23,7 +23,7 @@
   .region-block{margin-bottom:0;min-width:0;}
   .region-block table{font-size:12px;}
   .region-block h3{font-size:13px;font-weight:700;color:var(--blue-dark);margin:0 0 8px;}
-  .month-group-title{font-size:16px;font-weight:800;margin:16px 0 8px;color:var(--text);}
+  .month-group-title{font-size:20px;font-weight:800;margin:16px 0 8px;color:var(--text);}
   .month-group-title:first-of-type{margin-top:0;}
   .total-row td{font-weight:700;background:#f9fafb;}
   .badge.미완료{background:#fffbeb;color:var(--amber);}
@@ -378,7 +378,7 @@
       return `<div class="order-grid">${BIZ_UNITS.map(u => renderOrderUnitBlock(u, [])).join("")}</div>`;
     }
     return monthKeys.map(key => `
-      <div class="month-group-title">&lt;${monthGroupLabel(key)}&gt;</div>
+      <div class="month-group-title">${monthGroupLabel(key)}</div>
       <div class="order-grid">
         ${BIZ_UNITS.map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === key))).join("")}
       </div>
