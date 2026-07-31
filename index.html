@@ -31,6 +31,7 @@
   .summary-table th{text-align:center;background:#f3f4f6;color:var(--text);}
   .summary-table td{text-align:center;}
   .summary-table td.biz-name{font-weight:600;}
+  .summary-table td.qtr-cell{background:#f3f4f6;font-weight:700;}
   .biz-input{width:100px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:inherit;}
   main{max-width:1760px;margin:0 auto;padding:24px;}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;}
@@ -180,13 +181,14 @@
     "고객만족": { prev: 1316506043, target: 191666667, actual: 76415688, nextPlanned: 0 },
   };
   // Source: 사업계획_시트잠그기 시트 176~186행, 일매출일보_v4.7_20260730.xlsx (2026-07-31 기준)
+  // 월별 값 순서: 1월~12월
   const ANNUAL_TARGET_2026 = {
-    "국내영업-제품": 32208181818,
-    "국내영업-소모품": 21870500000,
-    "해외영업": 141561545600,
-    "Surgical": 2100000000,
-    "B2C": 157450000,
-    "고객만족": 2300000000,
+    "국내영업-제품": [2453454545,2708909091,2542818182,3016181818,2554909091,2794909091,2728818182,2451272727,2721272727,2486727273,2793090909,2955818182],
+    "국내영업-소모품": [1691500000,1726500000,1676500000,1761500000,1714000000,1799000000,1871000000,1773500000,1806000000,1986000000,2013500000,2051500000],
+    "해외영업": [7986400400,10187518200,11274263400,9446097400,10690316600,12526316600,11129321800,11229706600,14761176600,12921993000,14963980000,14444455000],
+    "Surgical": [106550000,114870000,134870000,164070000,166270000,167670000,175770000,177270000,187150000,218670000,244370000,242470000],
+    "B2C": [5025000,3600000,24325000,3600000,5025000,37150000,5025000,3600000,24325000,3600000,5025000,37150000],
+    "고객만족": [191666667,191666667,191666667,191666667,191666667,191666667,191666667,191666667,191666667,191666667,191666667,191666667],
   };
   const ORDER_SAMPLE = [
     { region:"국내영업-소모품", company:"원텍몰", item:"Oligio Face Tip", qty:130, price:250000, status:"완료", date:"2026-07-01" },
@@ -296,19 +298,60 @@
     bindViewEvents();
   }
 
+  function quarterSums(months){
+    return [0,1,2,3].map(q => months.slice(q*3,q*3+3).reduce((a,b)=>a+b,0));
+  }
+
+  function annualMonthCells(months, quarters){
+    let html = "";
+    for(let q=0; q<4; q++){
+      for(let m=0; m<3; m++){
+        html += `<td>${fmtWon(months[q*3+m])}</td>`;
+      }
+      html += `<td class="qtr-cell">${fmtWon(quarters[q])}</td>`;
+    }
+    return html;
+  }
+
   function renderAnnualTargetPanel(){
-    const total = BIZ_UNITS.reduce((s,u) => s + Number(ANNUAL_TARGET_2026[u]||0), 0);
+    const rows = BIZ_UNITS.map(u => {
+      const months = ANNUAL_TARGET_2026[u] || Array(12).fill(0);
+      const quarters = quarterSums(months);
+      const total = months.reduce((a,b)=>a+b,0);
+      return { u, months, quarters, total };
+    });
+    const totalMonths = Array.from({length:12}, (_,i) => rows.reduce((s,r)=>s+r.months[i],0));
+    const totalQuarters = quarterSums(totalMonths);
+    const grandTotal = totalMonths.reduce((a,b)=>a+b,0);
+
     return `
       <div class="panel">
         <h2>2026년 사업부별 매출 목표</h2>
         <div class="table-scroll">
-        <table>
-          <thead><tr><th>사업부명</th><th>2026년 목표 매출</th></tr></thead>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>사업부명</th>
+              <th>1월</th><th>2월</th><th>3월</th><th>1/4분기</th>
+              <th>4월</th><th>5월</th><th>6월</th><th>2/4분기</th>
+              <th>7월</th><th>8월</th><th>9월</th><th>3/4분기</th>
+              <th>10월</th><th>11월</th><th>12월</th><th>4/4분기</th>
+              <th>2026년 합계</th>
+            </tr>
+          </thead>
           <tbody>
-            ${BIZ_UNITS.map(u => `
-              <tr><td>${u}</td><td>${fmtWon(ANNUAL_TARGET_2026[u]||0)}</td></tr>
+            ${rows.map(r => `
+              <tr>
+                <td class="biz-name">${r.u}</td>
+                ${annualMonthCells(r.months, r.quarters)}
+                <td>${fmtWon(r.total)}</td>
+              </tr>
             `).join("")}
-            <tr class="total-row"><td>합계</td><td>${fmtWon(total)}</td></tr>
+            <tr class="total-row">
+              <td>합계</td>
+              ${annualMonthCells(totalMonths, totalQuarters)}
+              <td>${fmtWon(grandTotal)}</td>
+            </tr>
           </tbody>
         </table>
         </div>
