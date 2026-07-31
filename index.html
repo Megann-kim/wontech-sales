@@ -153,6 +153,14 @@
   }
 
   const BIZ_UNITS = ["국내영업-제품","국내영업-소모품","해외영업","Surgical","B2C","고객만족"];
+  const BIZ_SAMPLE = {
+    "국내영업-제품": { prev: 15224392376, target: 2728818182, actual: 891806360, nextPlanned: 432272727 },
+    "국내영업-소모품": { prev: 5790485506, target: 1871000000, actual: 929710000, nextPlanned: 0 },
+    "해외영업": { prev: 67214341035, target: 11129321800, actual: 2666451586, nextPlanned: 78050000 },
+    "Surgical": { prev: 795839286, target: 175770000, actual: 62465091, nextPlanned: 0 },
+    "B2C": { prev: -41112419, target: 5025000, actual: 992718, nextPlanned: 0 },
+    "고객만족": { prev: 1316506043, target: 191666667, actual: 76415688, nextPlanned: 0 },
+  };
 
   let state = loadData();
   if(!state.orders) state.orders = [];
@@ -330,7 +338,10 @@
 
     return `
       <div class="panel">
-        <h2>사업부별 매출 및 예상 실적 (${m.cur} 기준)</h2>
+        <div class="toolbar">
+          <h2 style="margin:0;">사업부별 매출 및 예상 실적 (${m.cur} 기준)</h2>
+          <button class="ghost" id="btnLoadSample">샘플데이터 불러오기</button>
+        </div>
         <div style="overflow-x:auto;">
         <table class="summary-table">
           <thead>
@@ -464,9 +475,15 @@
       inp.addEventListener("change", () => {
         const unit = inp.dataset.biz;
         const field = inp.dataset.field;
-        state.bizTargets[unit][field] = Number(inp.value.replace(/[^\d]/g,""))||0;
+        state.bizTargets[unit][field] = Number(inp.value.replace(/[^\d-]/g,""))||0;
         saveData(); render();
       });
+    });
+    document.getElementById("btnLoadSample")?.addEventListener("click", () => {
+      if(confirm("엑셀 요약 시트의 사업부별 매출목표·회계매출액·누적매출·익월납품예정 값을 불러와 현재 입력값을 덮어씁니다. 계속할까요?")){
+        BIZ_UNITS.forEach(u => { state.bizTargets[u] = { ...BIZ_SAMPLE[u] }; });
+        saveData(); render();
+      }
     });
   }
 
