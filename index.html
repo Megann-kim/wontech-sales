@@ -381,15 +381,16 @@
   function renderMonthlyTargetPanel(){
     const monthLabel = `${currentMonthIndex()+1}월`;
     const total = BIZ_UNITS.reduce((s,u) => s + monthlyTargetByUnit(u), 0);
+    const totalExpected = BIZ_UNITS.reduce((s,u) => s + expectedRevenue(u), 0);
     return `
       <div class="panel">
         <h2>이번 달(${monthLabel}) 목표 - 사업부별</h2>
         <div class="table-scroll">
         <table class="summary-table">
-          <thead><tr><th>사업부명</th><th>${monthLabel} 목표 매출</th></tr></thead>
+          <thead><tr><th>사업부명</th><th>${monthLabel} 목표 매출</th><th>${monthLabel} 예상매출액</th></tr></thead>
           <tbody>
-            ${BIZ_UNITS.map(u => `<tr><td class="biz-name">${u}</td><td>${fmtWon(monthlyTargetByUnit(u))}</td></tr>`).join("")}
-            <tr class="total-row"><td>합계</td><td>${fmtWon(total)}</td></tr>
+            ${BIZ_UNITS.map(u => `<tr><td class="biz-name">${u}</td><td>${fmtWon(monthlyTargetByUnit(u))}</td><td>${fmtWon(expectedRevenue(u))}</td></tr>`).join("")}
+            <tr class="total-row"><td>합계</td><td>${fmtWon(total)}</td><td>${fmtWon(totalExpected)}</td></tr>
           </tbody>
         </table>
         </div>
@@ -526,12 +527,18 @@
     `).join("");
   }
 
+  function expectedRevenue(unit){
+    const t = state.bizTargets[unit];
+    const sums = unitOrderSums(unit);
+    return Number(t.actual||0) + sums.done + sums.pending;
+  }
+
   function renderSummaryTable(){
     const m = getMonthLabels();
     const rows = BIZ_UNITS.map(u => {
       const t = state.bizTargets[u];
       const sums = unitOrderSums(u);
-      const expected = Number(t.actual||0) + sums.done + sums.pending;
+      const expected = expectedRevenue(u);
       const rate = Number(t.target||0) > 0 ? (expected/Number(t.target))*100 : 0;
       const cumulative = Number(t.prev||0) + expected + Number(t.nextPlanned||0);
       return { u, t, sums, expected, rate, cumulative };
