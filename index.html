@@ -32,6 +32,9 @@
   .summary-table td{text-align:center;}
   .summary-table td.biz-name{font-weight:600;}
   .summary-table td.qtr-cell{background:#f3f4f6;font-weight:700;}
+  .target-table{width:auto;font-size:13px;}
+  .target-table th,.target-table td{text-align:left;padding:8px 20px 8px 10px;white-space:nowrap;}
+  .target-table th{background:#f3f4f6;color:var(--text);}
   .biz-input{width:100px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:inherit;}
   main{width:100%;margin:0 auto;padding:24px;}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;}
@@ -386,7 +389,7 @@
       <div class="panel">
         <h2>이번 달(${monthLabel}) 목표 - 사업부별</h2>
         <div class="table-scroll">
-        <table class="summary-table">
+        <table class="target-table">
           <thead><tr><th>사업부명</th><th>${monthLabel} 목표 매출</th><th>${monthLabel} 예상매출액</th></tr></thead>
           <tbody>
             ${BIZ_UNITS.map(u => `<tr><td class="biz-name">${u}</td><td>${fmtWon(monthlyTargetByUnit(u))}</td><td>${fmtWon(expectedRevenue(u))}</td></tr>`).join("")}
