@@ -222,7 +222,7 @@
   BIZ_UNITS.forEach(u => {
     if(!state.bizTargets[u]) state.bizTargets[u] = { prev:0, target:0, actual:0, nextPlanned:0 };
   });
-  let view = "dash";
+  let view = state.view || "dash";
   let editingId = null;
   let editingOrderId = null;
   let dealFilter = "전체";
@@ -648,6 +648,8 @@
     const btn = e.target.closest("button[data-view]");
     if(!btn) return;
     view = btn.dataset.view;
+    state.view = view;
+    saveData();
     render();
   });
 
