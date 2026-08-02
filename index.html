@@ -132,6 +132,7 @@
     </div>
     <div class="field"><label>거래처명</label><input id="o_company" type="text" placeholder="거래처명"></div>
     <div class="field"><label>제품명</label><input id="o_item" type="text" placeholder="제품명"></div>
+    <div class="field"><label>시리얼넘버(선택)</label><input id="o_serial" type="text" placeholder="예: 1434"></div>
     <div class="field"><label>수량</label><input id="o_qty" type="text" inputmode="numeric" placeholder="0"></div>
     <div class="field" id="krwPriceField"><label>단가(원)</label><input id="o_price" type="text" inputmode="numeric" placeholder="0"></div>
     <div id="usdCalc" style="display:none;">
@@ -152,9 +153,30 @@
       </select>
     </div>
     <div class="field"><label id="o_dateLabel">납품(선적)예정일</label><input id="o_date" type="date"></div>
+    <div class="field">
+      <label><input id="o_accountingConfirmed" type="checkbox" style="width:auto;margin-right:6px;">회계반영완료 (실제 회계 금액으로 확정)</label>
+    </div>
+    <div class="field" id="accountingAmountField" style="display:none;">
+      <label>회계반영 금액(원)</label>
+      <input id="o_accountingAmount" type="text" inputmode="numeric" placeholder="0">
+    </div>
     <div class="modal-actions">
       <button class="ghost" id="btnOrderCancel">취소</button>
       <button class="primary" id="btnOrderSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="acctModalBackdrop">
+  <div class="modal">
+    <h3>회계 데이터 반영</h3>
+    <p style="font-size:14px;color:var(--muted);margin:-10px 0 16px;">회계raw 시트에서 행 전체(헤더 포함)를 복사해 아래에 붙여넣으세요. 시리얼키 + 수량이 일치하는 해외영업 수주 건에 대변 금액을 자동 반영합니다.</p>
+    <div class="field">
+      <textarea id="acctRawData" rows="10" placeholder="엑셀에서 복사한 내용을 여기에 붙여넣기 (Ctrl+V)" style="font-family:monospace;font-size:12px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="btnAcctCancel">취소</button>
+      <button class="primary" id="btnAcctRun">매칭 실행</button>
     </div>
   </div>
 </div>
@@ -271,10 +293,15 @@
     return { prev: `${prev}월`, cur: `${cur}월`, next: `${next}월` };
   }
 
+  function orderAmount(o){
+    if(o.accountingConfirmed) return Number(o.accountingAmount||0);
+    return Number(o.qty||0) * Number(o.price||0);
+  }
+
   function unitOrderSums(unit){
     const list = state.orders.filter(o => o.region === unit);
-    const done = list.filter(o => o.status === "완료").reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
-    const pending = list.filter(o => o.status !== "완료").reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const done = list.filter(o => o.status === "완료").reduce((s,o) => s + orderAmount(o), 0);
+    const pending = list.filter(o => o.status !== "완료").reduce((s,o) => s + orderAmount(o), 0);
     return { done, pending };
   }
 
@@ -291,7 +318,7 @@
     const ordersThisMonth = state.orders.filter(o => monthGroupKey(o.date) === thisMonth);
     const wonAmount = ordersThisMonth
       .filter(o => o.status === "완료")
-      .reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+      .reduce((s,o) => s + orderAmount(o), 0);
     const rate = target > 0 ? Math.round(wonAmount/target*100) : 0;
     const pendingCount = ordersThisMonth.filter(o => o.status !== "완료").length;
     const totalCount = ordersThisMonth.length;
@@ -306,7 +333,7 @@
     const yesterdayStr = new Date(now.getTime() - 86400000).toISOString().slice(0,10);
     const cumulativeAsOf = (dateStr) => state.orders
       .filter(o => o.status === "완료" && monthGroupKey(o.date) === thisMonth && o.date && o.date <= dateStr)
-      .reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+      .reduce((s,o) => s + orderAmount(o), 0);
     const today = cumulativeAsOf(todayStr);
     const yesterday = cumulativeAsOf(yesterdayStr);
     return { today, yesterday, delta: today - yesterday };
@@ -509,7 +536,7 @@
       ${renderSummaryTable()}
       <div class="panel">
         <div class="toolbar">
-          <div></div>
+          <button class="ghost" id="btnAcctMatch">회계 데이터 반영</button>
           <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
         </div>
         ${renderOrdersByMonth()}
@@ -631,22 +658,24 @@
   }
 
   function renderOrderMonthTable(monthOrders){
-    const total = monthOrders.reduce((s,o) => s + Number(o.qty||0)*Number(o.price||0), 0);
+    const total = monthOrders.reduce((s,o) => s + orderAmount(o), 0);
     return `
       <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>거래처명</th><th>제품명</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>납품(선적)일/예정일</th><th></th>
+          <th>거래처명</th><th>제품명</th><th>시리얼넘버</th><th>수량</th><th>단가</th><th>금액</th><th>상태</th><th>회계반영</th><th>납품(선적)일/예정일</th><th></th>
         </tr></thead>
         <tbody>
           ${monthOrders.map(o => `
             <tr>
               <td>${escapeHtml(o.company)}</td>
               <td>${escapeHtml(o.item)}</td>
+              <td>${escapeHtml(o.serialNo||"")}</td>
               <td>${Number(o.qty||0).toLocaleString("ko-KR")}</td>
               <td>${fmtWon(o.price)}</td>
-              <td>${fmtWon(Number(o.qty||0)*Number(o.price||0))}</td>
+              <td>${fmtWon(orderAmount(o))}</td>
               <td><span class="badge ${o.status==='완료' ? '완료' : '미완료'}">${o.status==='완료' ? '완료' : '미완료'}</span></td>
+              <td>${o.accountingConfirmed ? '<span class="badge 완료">반영완료</span>' : '<span class="badge 미완료">미반영</span>'}</td>
               <td>${o.date||""}</td>
               <td class="row-actions">
                 <button class="ghost" data-order-edit="${o.id}">수정</button>
@@ -654,7 +683,7 @@
               </td>
             </tr>
           `).join("")}
-          <tr class="total-row"><td colspan="4">합계</td><td>${fmtWon(total)}</td><td colspan="3"></td></tr>
+          <tr class="total-row"><td colspan="5">합계</td><td>${fmtWon(total)}</td><td colspan="4"></td></tr>
         </tbody>
       </table>
       </div>
@@ -692,6 +721,10 @@
       });
     });
     document.getElementById("btnAddOrder")?.addEventListener("click", () => openOrderModal());
+    document.getElementById("btnAcctMatch")?.addEventListener("click", () => {
+      document.getElementById("acctRawData").value = "";
+      document.getElementById("acctModalBackdrop").classList.add("show");
+    });
     document.querySelectorAll("[data-order-edit]").forEach(b=>{
       b.addEventListener("click", () => openOrderModal(b.dataset.orderEdit));
     });
@@ -801,23 +834,33 @@
     document.getElementById("o_region").value = o ? o.region : "국내영업-제품";
     document.getElementById("o_company").value = o ? o.company : "";
     document.getElementById("o_item").value = o ? o.item : "";
+    document.getElementById("o_serial").value = o ? (o.serialNo||"") : "";
     document.getElementById("o_qty").value = o ? o.qty : "";
     document.getElementById("o_price").value = o ? o.price : "";
     document.getElementById("o_usdPrice").value = o && o.usdPrice ? o.usdPrice : "";
     document.getElementById("o_exchangeRate").value = o && o.exchangeRate ? o.exchangeRate : "";
     document.getElementById("o_status").value = o ? o.status : "예정";
     document.getElementById("o_date").value = o ? (o.date||"") : "";
+    document.getElementById("o_accountingConfirmed").checked = !!(o && o.accountingConfirmed);
+    document.getElementById("o_accountingAmount").value = o && o.accountingAmount ? o.accountingAmount : "";
     updateOrderDateLabel();
     updateUsdCalcVisibility();
     recomputeUsdCalc();
+    updateAccountingFieldVisibility();
     document.getElementById("orderModalBackdrop").classList.add("show");
   }
   function closeOrderModal(){
     document.getElementById("orderModalBackdrop").classList.remove("show");
   }
 
+  function updateAccountingFieldVisibility(){
+    document.getElementById("accountingAmountField").style.display =
+      document.getElementById("o_accountingConfirmed").checked ? "block" : "none";
+  }
+
   document.getElementById("o_region").addEventListener("change", () => { updateOrderDateLabel(); updateUsdCalcVisibility(); recomputeUsdCalc(); });
   document.getElementById("o_status").addEventListener("change", updateOrderDateLabel);
+  document.getElementById("o_accountingConfirmed").addEventListener("change", updateAccountingFieldVisibility);
   ["o_qty","o_usdPrice","o_exchangeRate"].forEach(id => {
     document.getElementById(id).addEventListener("input", recomputeUsdCalc);
   });
@@ -833,12 +876,15 @@
       region,
       company,
       item: document.getElementById("o_item").value.trim(),
+      serialNo: document.getElementById("o_serial").value.trim(),
       qty: Number(document.getElementById("o_qty").value.replace(/[^\d]/g,""))||0,
       price: Number(document.getElementById("o_price").value.replace(/[^\d]/g,""))||0,
       status: document.getElementById("o_status").value,
       date: document.getElementById("o_date").value || "",
       usdPrice: region === "해외영업" ? num("o_usdPrice") : 0,
       exchangeRate: region === "해외영업" ? num("o_exchangeRate") : 0,
+      accountingConfirmed: document.getElementById("o_accountingConfirmed").checked,
+      accountingAmount: num("o_accountingAmount"),
     };
     if(editingOrderId){
       const idx = state.orders.findIndex(o=>o.id===editingOrderId);
@@ -849,6 +895,62 @@
     saveData();
     closeOrderModal();
     render();
+  });
+
+  function parseKRW(str){
+    return Number(String(str||"").replace(/[^0-9.-]/g,""))||0;
+  }
+
+  function closeAcctModal(){
+    document.getElementById("acctModalBackdrop").classList.remove("show");
+  }
+  document.getElementById("btnAcctCancel").addEventListener("click", closeAcctModal);
+  document.getElementById("acctModalBackdrop").addEventListener("click", (e) => {
+    if(e.target.id === "acctModalBackdrop") closeAcctModal();
+  });
+  document.getElementById("btnAcctRun").addEventListener("click", () => {
+    const raw = document.getElementById("acctRawData").value;
+    const lines = raw.split(/\r?\n/).filter(l => l.trim() !== "");
+    if(lines.length < 2){ alert("헤더 행과 데이터 행을 포함해 붙여넣어 주세요."); return; }
+    const header = lines[0].split("\t").map(h => h.trim());
+    const idxSerial = header.indexOf("시리얼키");
+    const idxQty = header.indexOf("수량");
+    const idxCredit = header.indexOf("대변");
+    if(idxSerial === -1 || idxQty === -1 || idxCredit === -1){
+      alert("헤더에서 '시리얼키', '수량', '대변' 열을 찾지 못했습니다. 회계raw 시트의 헤더 행을 포함해서 붙여넣었는지 확인해주세요.");
+      return;
+    }
+    let matched = 0, noSerial = 0, noMatch = 0;
+    const unmatchedSerials = [];
+    for(let i=1; i<lines.length; i++){
+      const cols = lines[i].split("\t");
+      const serial = (cols[idxSerial]||"").trim();
+      const qty = parseKRW(cols[idxQty]);
+      const credit = parseKRW(cols[idxCredit]);
+      if(!serial){ noSerial++; continue; }
+      const order = state.orders.find(o =>
+        o.region === "해외영업" &&
+        String(o.serialNo||"").trim() === serial &&
+        Number(o.qty) === qty &&
+        !o.accountingConfirmed
+      );
+      if(order){
+        order.accountingConfirmed = true;
+        order.accountingAmount = credit;
+        matched++;
+      } else {
+        noMatch++;
+        unmatchedSerials.push(`${serial} (수량 ${qty})`);
+      }
+    }
+    saveData();
+    closeAcctModal();
+    render();
+    let msg = `자동 반영 완료: ${matched}건\n시리얼넘버 없어 스킵: ${noSerial}건 (수기 입력 필요)\n시리얼넘버는 있으나 일치하는 수주 없음: ${noMatch}건`;
+    if(unmatchedSerials.length > 0){
+      msg += `\n\n일치 안 된 시리얼: ${unmatchedSerials.slice(0,20).join(", ")}${unmatchedSerials.length>20?" 외 "+(unmatchedSerials.length-20)+"건":""}`;
+    }
+    alert(msg);
   });
 
   document.getElementById("nav").addEventListener("click", (e) => {
