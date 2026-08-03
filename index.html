@@ -181,6 +181,29 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="pasteModalBackdrop">
+  <div class="modal">
+    <h3>신규수주 붙여넣기</h3>
+    <p style="font-size:14px;color:var(--muted);margin:-10px 0 16px;">
+      일매출일보 시트의 "2. 납품(선적) 및 미납품(미선적) 현황" 표에서 국내영업 또는 해외영업 쪽 헤더 2줄(거래처명·제품명·수량·단가·납품(선적)·미납품(미선적) 행)부터 데이터 끝까지 통째로 선택해 복사한 뒤 아래에 붙여넣으세요. 이미 있는 건(거래처+제품+수량+날짜 동일)은 건너뜁니다.
+    </p>
+    <div class="field">
+      <label>구분</label>
+      <select id="pasteRegionType">
+        <option value="domestic">국내영업 (납품/미납품)</option>
+        <option value="overseas">해외영업 (선적/미선적)</option>
+      </select>
+    </div>
+    <div class="field">
+      <textarea id="pasteRawData" rows="10" placeholder="엑셀에서 복사한 내용을 여기에 붙여넣기 (Ctrl+V)" style="font-family:monospace;font-size:12px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="btnPasteCancel">취소</button>
+      <button class="primary" id="btnPasteRun">가져오기</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -269,20 +292,6 @@
     { region:"해외영업", company:"미국법인", item:"Pastelle Pro", qty:2, price:33350000, status:"완료", date:"2026-07-23" },
     { region:"해외영업", company:"일본/sakae", item:"LAVIEEN", qty:1, price:49000000, status:"완료", date:"2026-07-28" },
   ];
-  // Source: 일매출일보_v4.7_20260803-해외.xlsx > 일매출일보_7월_20260731 (2) 시트, 해외영업 납품/미납품 현황
-  const ORDER_SAMPLE_AUG_OVERSEAS = [
-    { region:"해외영업", company:"콜롬비아/Invertecnologicas", item:"Pastelle Pro", qty:1, price:39150000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"튀르키예/Mayaform", item:"LAVIEEN", qty:1, price:38900000, status:"완료", date:"2026-07-28" },
-    { region:"해외영업", company:"일본/Lively Clinic", item:"Ultraskin Tightan", qty:2, price:9000000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"일본/Tomura Ladies Clinic", item:"Oligio Kiss", qty:1, price:43000000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"일본/Kida Clinic", item:"Oligio Kiss", qty:1, price:45000000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"이스라엘/Galaxy Medical", item:"Oligio X", qty:2, price:32625000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"대만/Brilliance", item:"Majesty", qty:2, price:68150000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"대만/Brilliance", item:"Oligio X", qty:10, price:21750000, status:"예정", date:"2026-08-10" },
-    { region:"해외영업", company:"멕시코/Tecnilasser", item:"Pastelle Pro", qty:1, price:34800000, status:"예정", date:"2026-08-05" },
-    { region:"해외영업", company:"멕시코/Tecnilasser", item:"Lavieen", qty:5, price:37700000, status:"예정", date:"2026-08-10" },
-  ];
-
   let state = loadData();
   if(!state.orders) state.orders = [];
   if(!state.bizTargets) state.bizTargets = {};
@@ -600,7 +609,7 @@
           </div>
           <div style="display:flex;gap:8px;">
             <button class="ghost" id="btnAcctMatch">회계 데이터 반영</button>
-            <button class="ghost" id="btnAddAugOverseas">8월 해외 수주 추가</button>
+            <button class="ghost" id="btnPasteOpen">엑셀에서 붙여넣기</button>
             <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
           </div>
         </div>
@@ -807,20 +816,9 @@
       document.getElementById("acctRawData").value = "";
       document.getElementById("acctModalBackdrop").classList.add("show");
     });
-    document.getElementById("btnAddAugOverseas")?.addEventListener("click", () => {
-      let added = 0, skipped = 0;
-      ORDER_SAMPLE_AUG_OVERSEAS.forEach(o => {
-        const dup = state.orders.some(x =>
-          x.region === o.region && x.company === o.company && x.item === o.item &&
-          Number(x.qty) === o.qty && x.date === o.date
-        );
-        if(dup){ skipped++; return; }
-        state.orders.push({ id: uid(), ...o });
-        added++;
-      });
-      saveData();
-      render();
-      alert(`8월 해외 수주 추가 완료: ${added}건 추가${skipped>0 ? `, ${skipped}건은 이미 있어서 건너뜀` : ""}`);
+    document.getElementById("btnPasteOpen")?.addEventListener("click", () => {
+      document.getElementById("pasteRawData").value = "";
+      document.getElementById("pasteModalBackdrop").classList.add("show");
     });
     document.querySelectorAll("[data-order-edit]").forEach(b=>{
       b.addEventListener("click", () => openOrderModal(b.dataset.orderEdit));
@@ -1048,6 +1046,80 @@
       msg += `\n\n일치 안 된 시리얼: ${unmatchedSerials.slice(0,20).join(", ")}${unmatchedSerials.length>20?" 외 "+(unmatchedSerials.length-20)+"건":""}`;
     }
     alert(msg);
+  });
+
+  function parseKoreanDate(str){
+    const m = String(str||"").match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+    if(!m) return "";
+    const mm = String(m[1]).padStart(2,"0");
+    const dd = String(m[2]).padStart(2,"0");
+    return `2026-${mm}-${dd}`;
+  }
+
+  function isTipItem(name){
+    return /tip/i.test(name||"");
+  }
+
+  function closePasteModal(){
+    document.getElementById("pasteModalBackdrop").classList.remove("show");
+  }
+  document.getElementById("btnPasteCancel").addEventListener("click", closePasteModal);
+  document.getElementById("pasteModalBackdrop").addEventListener("click", (e) => {
+    if(e.target.id === "pasteModalBackdrop") closePasteModal();
+  });
+  document.getElementById("btnPasteRun").addEventListener("click", () => {
+    const type = document.getElementById("pasteRegionType").value;
+    const raw = document.getElementById("pasteRawData").value;
+    const lines = raw.split(/\r?\n/).filter(l => l.trim() !== "");
+    if(lines.length < 3){ alert("헤더 2줄과 데이터 행을 포함해 붙여넣어 주세요."); return; }
+    const h1 = lines[0].split("\t").map(c => c.trim());
+    const h2 = lines[1].split("\t").map(c => c.trim());
+
+    const idxCompany = h1.indexOf("거래처명");
+    const idxItem = h1.indexOf("제품명");
+    const idxQty = h1.indexOf("수량");
+    const idxPrice = h1.indexOf("단가");
+    const idxDoneCol = h1.indexOf(type === "domestic" ? "납품" : "선적");
+    const idxPendCol = h1.indexOf(type === "domestic" ? "미납품" : "미선적");
+    const idxDoneDate = h2.indexOf("납품(선적)일");
+    const idxPendDate = h2.indexOf("납품(선적)예정일");
+
+    if([idxCompany, idxItem, idxQty, idxPrice, idxDoneCol, idxPendCol, idxDoneDate, idxPendDate].some(i => i === -1)){
+      alert("헤더에서 거래처명/제품명/수량/단가/납품(또는 선적)/미납품(또는 미선적)/날짜 열을 찾지 못했습니다. 표의 헤더 2줄(예: 거래처명·제품명·수량·단가 있는 줄과 그 바로 아래 금액·날짜 있는 줄)을 정확히 포함해서 붙여넣었는지 확인해주세요.");
+      return;
+    }
+
+    let added = 0, skipped = 0, parseFail = 0;
+    for(let i=2; i<lines.length; i++){
+      const cols = lines[i].split("\t");
+      const company = (cols[idxCompany]||"").trim();
+      if(!company) continue;
+      const item = (cols[idxItem]||"").trim();
+      const qty = parseKRW(cols[idxQty]);
+      const price = parseKRW(cols[idxPrice]);
+      const doneAmt = parseKRW(cols[idxDoneCol]);
+      const pendAmt = parseKRW(cols[idxPendCol]);
+      let status, date;
+      if(doneAmt > 0){ status = "완료"; date = parseKoreanDate(cols[idxDoneDate]); }
+      else if(pendAmt > 0){ status = "예정"; date = parseKoreanDate(cols[idxPendDate]); }
+      else { continue; }
+      if(!qty || !price){ parseFail++; continue; }
+      const region = type === "overseas" ? "해외영업" : (isTipItem(item) ? "국내영업-소모품" : "국내영업-제품");
+      const dup = state.orders.some(x =>
+        x.region === region && x.company === company && x.item === item &&
+        Number(x.qty) === qty && x.date === date
+      );
+      if(dup){ skipped++; continue; }
+      state.orders.push({
+        id: uid(), region, company, item, qty, price, status, date,
+        usdPrice:0, exchangeRate:0, accountingConfirmed:false, accountingAmount:0, serialNo:""
+      });
+      added++;
+    }
+    saveData();
+    closePasteModal();
+    render();
+    alert(`가져오기 완료: ${added}건 추가${skipped>0 ? `, ${skipped}건 중복이라 건너뜀` : ""}${parseFail>0 ? `, ${parseFail}건 수량/단가 인식 실패` : ""}`);
   });
 
   document.getElementById("nav").addEventListener("click", (e) => {
