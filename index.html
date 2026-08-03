@@ -269,6 +269,19 @@
     { region:"해외영업", company:"미국법인", item:"Pastelle Pro", qty:2, price:33350000, status:"완료", date:"2026-07-23" },
     { region:"해외영업", company:"일본/sakae", item:"LAVIEEN", qty:1, price:49000000, status:"완료", date:"2026-07-28" },
   ];
+  // Source: 일매출일보_v4.7_20260803-해외.xlsx > 일매출일보_7월_20260731 (2) 시트, 해외영업 납품/미납품 현황
+  const ORDER_SAMPLE_AUG_OVERSEAS = [
+    { region:"해외영업", company:"콜롬비아/Invertecnologicas", item:"Pastelle Pro", qty:1, price:39150000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"튀르키예/Mayaform", item:"LAVIEEN", qty:1, price:38900000, status:"완료", date:"2026-07-28" },
+    { region:"해외영업", company:"일본/Lively Clinic", item:"Ultraskin Tightan", qty:2, price:9000000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"일본/Tomura Ladies Clinic", item:"Oligio Kiss", qty:1, price:43000000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"일본/Kida Clinic", item:"Oligio Kiss", qty:1, price:45000000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"이스라엘/Galaxy Medical", item:"Oligio X", qty:2, price:32625000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"대만/Brilliance", item:"Majesty", qty:2, price:68150000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"대만/Brilliance", item:"Oligio X", qty:10, price:21750000, status:"예정", date:"2026-08-10" },
+    { region:"해외영업", company:"멕시코/Tecnilasser", item:"Pastelle Pro", qty:1, price:34800000, status:"예정", date:"2026-08-05" },
+    { region:"해외영업", company:"멕시코/Tecnilasser", item:"Lavieen", qty:5, price:37700000, status:"예정", date:"2026-08-10" },
+  ];
 
   let state = loadData();
   if(!state.orders) state.orders = [];
@@ -587,6 +600,7 @@
           </div>
           <div style="display:flex;gap:8px;">
             <button class="ghost" id="btnAcctMatch">회계 데이터 반영</button>
+            <button class="ghost" id="btnAddAugOverseas">8월 해외 수주 추가</button>
             <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
           </div>
         </div>
@@ -792,6 +806,21 @@
     document.getElementById("btnAcctMatch")?.addEventListener("click", () => {
       document.getElementById("acctRawData").value = "";
       document.getElementById("acctModalBackdrop").classList.add("show");
+    });
+    document.getElementById("btnAddAugOverseas")?.addEventListener("click", () => {
+      let added = 0, skipped = 0;
+      ORDER_SAMPLE_AUG_OVERSEAS.forEach(o => {
+        const dup = state.orders.some(x =>
+          x.region === o.region && x.company === o.company && x.item === o.item &&
+          Number(x.qty) === o.qty && x.date === o.date
+        );
+        if(dup){ skipped++; return; }
+        state.orders.push({ id: uid(), ...o });
+        added++;
+      });
+      saveData();
+      render();
+      alert(`8월 해외 수주 추가 완료: ${added}건 추가${skipped>0 ? `, ${skipped}건은 이미 있어서 건너뜀` : ""}`);
     });
     document.querySelectorAll("[data-order-edit]").forEach(b=>{
       b.addEventListener("click", () => openOrderModal(b.dataset.orderEdit));
