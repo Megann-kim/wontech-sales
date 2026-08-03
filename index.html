@@ -569,12 +569,26 @@
   }
 
   function renderOrders(){
+    const monthOptions = Array.from({length:12}, (_,i) => {
+      const val = `2026-${String(i+1).padStart(2,"0")}`;
+      const selected = state.ordersMonthFilter === val ? "selected" : "";
+      return `<option value="${val}" ${selected}>${i+1}월</option>`;
+    }).join("");
     return `
       ${renderSummaryTable()}
       <div class="panel">
         <div class="toolbar">
-          <button class="ghost" id="btnAcctMatch">회계 데이터 반영</button>
-          <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <label style="font-weight:600;font-size:14px;">월 선택</label>
+            <select id="ordersMonthFilter" style="width:auto;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;">
+              <option value="" ${state.ordersMonthFilter ? "" : "selected"}>전체</option>
+              ${monthOptions}
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="ghost" id="btnAcctMatch">회계 데이터 반영</button>
+            <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
+          </div>
         </div>
         ${renderOrdersByMonth()}
         <div class="sub" style="color:var(--muted);font-size:12px;margin-top:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
@@ -583,9 +597,14 @@
   }
 
   function renderOrdersByMonth(){
-    let monthKeys = [...new Set(state.orders.map(o => monthGroupKey(o.date)))].sort((a,b)=>a.localeCompare(b));
-    if(monthKeys.length === 0){
-      monthKeys = [new Date().toISOString().slice(0,7)];
+    let monthKeys;
+    if(state.ordersMonthFilter){
+      monthKeys = [state.ordersMonthFilter];
+    } else {
+      monthKeys = [...new Set(state.orders.map(o => monthGroupKey(o.date)))].sort((a,b)=>a.localeCompare(b));
+      if(monthKeys.length === 0){
+        monthKeys = [new Date().toISOString().slice(0,7)];
+      }
     }
     return monthKeys.map(key => `
       <div class="month-group-title">${monthGroupLabel(key)}</div>
@@ -748,6 +767,10 @@
     });
     document.getElementById("btnResetMonth")?.addEventListener("click", () => {
       state.selectedMonth = thisMonth;
+      saveData(); render();
+    });
+    document.getElementById("ordersMonthFilter")?.addEventListener("change", (e) => {
+      state.ordersMonthFilter = e.target.value;
       saveData(); render();
     });
     document.getElementById("btnAddDeal")?.addEventListener("click", () => openModal());
