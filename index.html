@@ -283,6 +283,7 @@
 
   const fmtWon = n => (Number(n)||0).toLocaleString("ko-KR") + "원";
   const thisMonth = new Date().toISOString().slice(0,7);
+  if(!state.selectedMonth) state.selectedMonth = thisMonth;
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
   function getMonthLabels(){
@@ -306,7 +307,7 @@
   }
 
   function currentMonthIndex(){
-    return new Date().getMonth();
+    return Number(state.selectedMonth.slice(5,7)) - 1;
   }
 
   function monthlyTargetByUnit(unit){
@@ -315,7 +316,7 @@
 
   function computeOrderStats(){
     const target = BIZ_UNITS.reduce((s,u) => s + monthlyTargetByUnit(u), 0);
-    const ordersThisMonth = state.orders.filter(o => monthGroupKey(o.date) === thisMonth);
+    const ordersThisMonth = state.orders.filter(o => monthGroupKey(o.date) === state.selectedMonth);
     const wonAmount = ordersThisMonth
       .filter(o => o.status === "완료")
       .reduce((s,o) => s + orderAmount(o), 0);
@@ -332,7 +333,7 @@
     const todayStr = now.toISOString().slice(0,10);
     const yesterdayStr = new Date(now.getTime() - 86400000).toISOString().slice(0,10);
     const cumulativeAsOf = (dateStr) => state.orders
-      .filter(o => o.status === "완료" && monthGroupKey(o.date) === thisMonth && o.date && o.date <= dateStr)
+      .filter(o => o.status === "완료" && monthGroupKey(o.date) === state.selectedMonth && o.date && o.date <= dateStr)
       .reduce((s,o) => s + orderAmount(o), 0);
     const today = cumulativeAsOf(todayStr);
     const yesterday = cumulativeAsOf(yesterdayStr);
@@ -415,7 +416,7 @@
     const totalExpected = BIZ_UNITS.reduce((s,u) => s + expectedRevenue(u), 0);
     return `
       <div class="panel">
-        <h2>이번 달(${monthLabel}) 목표 - 사업부별</h2>
+        <h2>${monthLabel} 목표 - 사업부별</h2>
         <div class="table-scroll">
         <table class="target-table">
           <thead><tr><th>사업부명</th><th>${monthLabel} 목표 매출</th><th>${monthLabel} 예상매출액</th></tr></thead>
@@ -430,12 +431,30 @@
   }
 
   function renderDeltaPanel(){
+    const monthLabel = `${currentMonthIndex()+1}월`;
+    if(state.selectedMonth !== thisMonth){
+      const total = state.orders
+        .filter(o => o.status === "완료" && monthGroupKey(o.date) === state.selectedMonth)
+        .reduce((s,o) => s + orderAmount(o), 0);
+      return `
+        <div class="panel">
+          <h2>${monthLabel} 누적 수주금액</h2>
+          <div class="cards">
+            <div class="card">
+              <div class="label">${monthLabel} 누적(완료 기준)</div>
+              <div class="value">${fmtWon(total)}</div>
+              <div class="sub">이번 달이 아니라 전일 대비 증감은 표시하지 않습니다</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     const d = computeDailyDelta();
     const sign = d.delta > 0 ? "+" : d.delta < 0 ? "-" : "";
     const color = d.delta > 0 ? "var(--green)" : d.delta < 0 ? "var(--red)" : "var(--muted)";
     return `
       <div class="panel">
-        <h2>전일 대비 증감 (이번 달 누적 수주금액)</h2>
+        <h2>전일 대비 증감 (${monthLabel} 누적 수주금액)</h2>
         <div class="cards">
           <div class="card">
             <div class="label">전일 누적</div>
@@ -454,13 +473,31 @@
     `;
   }
 
+  function renderMonthSelector(){
+    const options = Array.from({length:12}, (_,i) => {
+      const val = `2026-${String(i+1).padStart(2,"0")}`;
+      const selected = state.selectedMonth === val ? "selected" : "";
+      return `<option value="${val}" ${selected}>${i+1}월</option>`;
+    }).join("");
+    const isRealCurrent = state.selectedMonth === thisMonth;
+    return `
+      <div class="panel" style="display:flex;align-items:center;gap:12px;">
+        <label style="font-weight:600;font-size:14px;">기준 월</label>
+        <select id="dashMonthSelect" style="width:auto;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;">${options}</select>
+        ${isRealCurrent ? `<span class="sub" style="color:var(--muted);font-size:12px;">현재 실제 달(${thisMonth.slice(5,7)}월)입니다</span>` : `<button class="ghost" id="btnResetMonth">이번 달로 돌아가기</button>`}
+      </div>
+    `;
+  }
+
   function renderDash(){
     const s = computeOrderStats();
+    const monthLabel = `${currentMonthIndex()+1}월`;
     return `
       ${renderAnnualTargetPanel()}
+      ${renderMonthSelector()}
       <div class="cards">
         <div class="card">
-          <div class="label">이번 달 수주 금액</div>
+          <div class="label">${monthLabel} 수주 금액</div>
           <div class="value">${fmtWon(s.wonAmount)}</div>
           <div class="sub">목표 ${fmtWon(s.target)}</div>
         </div>
@@ -477,7 +514,7 @@
         <div class="card">
           <div class="label">수주 전환율</div>
           <div class="value">${s.convRate}%</div>
-          <div class="sub">이번 달 등록 건 기준</div>
+          <div class="sub">${monthLabel} 등록 건 기준</div>
         </div>
       </div>
       ${renderMonthlyTargetPanel()}
@@ -705,6 +742,14 @@
   }
 
   function bindViewEvents(){
+    document.getElementById("dashMonthSelect")?.addEventListener("change", (e) => {
+      state.selectedMonth = e.target.value;
+      saveData(); render();
+    });
+    document.getElementById("btnResetMonth")?.addEventListener("click", () => {
+      state.selectedMonth = thisMonth;
+      saveData(); render();
+    });
     document.getElementById("btnAddDeal")?.addEventListener("click", () => openModal());
     document.querySelectorAll("[data-filter]").forEach(b=>{
       b.addEventListener("click", () => { dealFilter = b.dataset.filter; render(); });
