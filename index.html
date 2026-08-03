@@ -132,7 +132,7 @@
     </div>
     <div class="field"><label>거래처명</label><input id="o_company" type="text" placeholder="거래처명"></div>
     <div class="field"><label>제품명</label><input id="o_item" type="text" placeholder="제품명"></div>
-    <div class="field"><label>시리얼넘버(선택)</label><input id="o_serial" type="text" placeholder="예: 1434"></div>
+    <div class="field" id="serialField" style="display:none;"><label>시리얼넘버(선택)</label><input id="o_serial" type="text" placeholder="예: 1434"></div>
     <div class="field"><label>수량</label><input id="o_qty" type="text" inputmode="numeric" placeholder="0"></div>
     <div class="field" id="krwPriceField"><label>단가(원)</label><input id="o_price" type="text" inputmode="numeric" placeholder="0"></div>
     <div id="usdCalc" style="display:none;">
@@ -903,6 +903,7 @@
     const isOverseas = document.getElementById("o_region").value === "해외영업";
     document.getElementById("usdCalc").style.display = isOverseas ? "block" : "none";
     document.getElementById("krwPriceField").style.display = isOverseas ? "none" : "block";
+    document.getElementById("serialField").style.display = isOverseas ? "block" : "none";
   }
 
   function num(id){
@@ -971,7 +972,7 @@
       region,
       company,
       item: document.getElementById("o_item").value.trim(),
-      serialNo: document.getElementById("o_serial").value.trim(),
+      serialNo: region === "해외영업" ? document.getElementById("o_serial").value.trim() : "",
       qty: Number(document.getElementById("o_qty").value.replace(/[^\d]/g,""))||0,
       price: Number(document.getElementById("o_price").value.replace(/[^\d]/g,""))||0,
       status: document.getElementById("o_status").value,
