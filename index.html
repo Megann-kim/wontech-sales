@@ -295,9 +295,6 @@
   let state = loadData();
   if(!state.orders) state.orders = [];
   if(!state.bizTargets) state.bizTargets = {};
-  BIZ_UNITS.forEach(u => {
-    if(!state.bizTargets[u]) state.bizTargets[u] = { prev:0, target:0, actual:0, nextPlanned:0 };
-  });
   let view = state.view || "dash";
   let editingId = null;
   let editingOrderId = null;
@@ -307,6 +304,23 @@
   const thisMonth = new Date().toISOString().slice(0,7);
   if(!state.selectedMonth) state.selectedMonth = thisMonth;
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+  // 월별 구조로 넘어오기 전(과거 버전)에 저장된 평면 구조 {사업부:{...}} 는
+  // 전부 7월 샘플데이터에서 온 값이므로 2026-07로 1회 이전(월이 바뀌었다고
+  // 자동으로 다른 달 수치인 것처럼 보이지 않도록)
+  let migratedBizTargets = false;
+  BIZ_UNITS.forEach(u => {
+    const old = state.bizTargets[u];
+    if(old && typeof old === "object" && ("prev" in old || "actual" in old)){
+      if(!state.bizTargets["2026-07"]) state.bizTargets["2026-07"] = {};
+      if(!state.bizTargets["2026-07"][u]){
+        state.bizTargets["2026-07"][u] = { prev: old.prev||0, actual: old.actual||0, nextPlanned: old.nextPlanned||0 };
+      }
+      delete state.bizTargets[u];
+      migratedBizTargets = true;
+    }
+  });
+  if(migratedBizTargets) saveData();
 
   function getMonthLabels(){
     const now = new Date();
@@ -328,12 +342,22 @@
     return { done, pending };
   }
 
-  function currentMonthIndex(){
-    return Number(state.selectedMonth.slice(5,7)) - 1;
+  function monthIndexOf(monthStr){
+    return Number(monthStr.slice(5,7)) - 1;
   }
 
-  function monthlyTargetByUnit(unit){
-    return Number((ANNUAL_TARGET_2026[unit]||[])[currentMonthIndex()]||0);
+  function currentMonthIndex(){
+    return monthIndexOf(state.selectedMonth);
+  }
+
+  function monthlyTargetByUnit(unit, month){
+    return Number((ANNUAL_TARGET_2026[unit]||[])[monthIndexOf(month || state.selectedMonth)]||0);
+  }
+
+  function getBizTarget(month, unit){
+    if(!state.bizTargets[month]) state.bizTargets[month] = {};
+    if(!state.bizTargets[month][unit]) state.bizTargets[month][unit] = { prev:0, actual:0, nextPlanned:0 };
+    return state.bizTargets[month][unit];
   }
 
   function computeOrderStats(){
@@ -637,8 +661,8 @@
     `).join("");
   }
 
-  function expectedRevenue(unit){
-    const t = state.bizTargets[unit];
+  function expectedRevenue(unit, month){
+    const t = getBizTarget(month || state.selectedMonth, unit);
     const sums = unitOrderSums(unit);
     return Number(t.actual||0) + sums.done + sums.pending;
   }
@@ -646,15 +670,16 @@
   function renderSummaryTable(){
     const m = getMonthLabels();
     const rows = BIZ_UNITS.map(u => {
-      const t = state.bizTargets[u];
+      const t = getBizTarget(thisMonth, u);
       const sums = unitOrderSums(u);
-      const expected = expectedRevenue(u);
-      const rate = Number(t.target||0) > 0 ? (expected/Number(t.target))*100 : 0;
+      const target = monthlyTargetByUnit(u, thisMonth);
+      const expected = expectedRevenue(u, thisMonth);
+      const rate = target > 0 ? (expected/target)*100 : 0;
       const cumulative = Number(t.prev||0) + expected + Number(t.nextPlanned||0);
-      return { u, t, sums, expected, rate, cumulative };
+      return { u, t, target, sums, expected, rate, cumulative };
     });
     const totalPrev = rows.reduce((s,r)=>s+Number(r.t.prev||0),0);
-    const totalTarget = rows.reduce((s,r)=>s+Number(r.t.target||0),0);
+    const totalTarget = rows.reduce((s,r)=>s+r.target,0);
     const totalActual = rows.reduce((s,r)=>s+Number(r.t.actual||0),0);
     const totalDone = rows.reduce((s,r)=>s+r.sums.done,0);
     const totalPending = rows.reduce((s,r)=>s+r.sums.pending,0);
@@ -695,12 +720,12 @@
                 ${i===0 ? `<td rowspan="${BIZ_UNITS.length}" style="text-align:center;font-weight:700;">금액</td>` : ''}
                 <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="prev" value="${r.t.prev||0}"></td>
                 <td class="biz-name">${r.u}</td>
-                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="target" value="${r.t.target||0}"></td>
+                <td>${fmtWon(r.target)}</td>
                 <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="actual" value="${r.t.actual||0}"></td>
                 <td>${fmtWon(r.sums.done)}</td>
                 <td>${fmtWon(r.sums.pending)}</td>
                 <td>${fmtWon(r.expected)}</td>
-                <td>${Number(r.t.target||0) > 0 ? r.rate.toFixed(1)+'%' : '-'}</td>
+                <td>${r.target > 0 ? r.rate.toFixed(1)+'%' : '-'}</td>
                 <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="nextPlanned" value="${r.t.nextPlanned||0}"></td>
                 <td>${fmtWon(r.cumulative)}</td>
               </tr>
@@ -721,7 +746,7 @@
           </tbody>
         </table>
         </div>
-        <div class="sub" style="color:var(--muted);font-size:12px;margin-top:8px;">※ ①②③⑦은 직접 입력하는 회계/목표 수치입니다. ④⑤⑥⑧, 달성률은 아래 수주관리 데이터로 자동 계산됩니다.</div>
+        <div class="sub" style="color:var(--muted);font-size:12px;margin-top:8px;">※ ①③⑦은 ${m.cur} 기준으로 직접 입력하는 회계 수치입니다(월이 바뀌면 새로 입력). ②는 위 2026년 목표표에서 자동으로 가져옵니다. ④⑤⑥⑧, 달성률은 아래 수주관리 데이터로 자동 계산됩니다.</div>
       </div>
     `;
   }
@@ -835,13 +860,17 @@
       inp.addEventListener("change", () => {
         const unit = inp.dataset.biz;
         const field = inp.dataset.field;
-        state.bizTargets[unit][field] = Number(inp.value.replace(/[^\d-]/g,""))||0;
+        const t = getBizTarget(thisMonth, unit);
+        t[field] = Number(inp.value.replace(/[^\d-]/g,""))||0;
         saveData(); render();
       });
     });
     document.getElementById("btnLoadSample")?.addEventListener("click", () => {
-      if(confirm("엑셀 요약/일매출일보 시트의 사업부별 목표 수치와 신규수주 목록을 불러와 현재 입력값·수주 목록을 덮어씁니다. 계속할까요?")){
-        BIZ_UNITS.forEach(u => { state.bizTargets[u] = { ...BIZ_SAMPLE[u] }; });
+      if(confirm("엑셀 요약/일매출일보 시트의 7월 사업부별 회계 수치와 신규수주 목록을 불러와 현재 입력값·수주 목록을 덮어씁니다. 계속할까요?")){
+        BIZ_UNITS.forEach(u => {
+          state.bizTargets["2026-07"] = state.bizTargets["2026-07"] || {};
+          state.bizTargets["2026-07"][u] = { prev: BIZ_SAMPLE[u].prev, actual: BIZ_SAMPLE[u].actual, nextPlanned: BIZ_SAMPLE[u].nextPlanned };
+        });
         state.orders = ORDER_SAMPLE.map(o => ({ id: uid(), ...o }));
         saveData(); render();
       }
