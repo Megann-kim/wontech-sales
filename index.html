@@ -23,8 +23,10 @@
   .region-block{margin-bottom:0;min-width:0;}
   .region-block table{font-size:12px;}
   .region-block h3{font-size:13px;font-weight:700;color:var(--blue-dark);margin:0 0 8px;}
-  .month-group-title{font-size:26px;font-weight:800;margin:16px 0 8px;color:var(--text);}
-  .month-group-title:first-of-type{margin-top:0;}
+  .month-tabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .month-tab-btn{border:1px solid var(--border);background:#fff;padding:9px 18px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;color:var(--muted);}
+  .month-tab-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .month-tab-btn:hover:not(.active){background:#eef2ff;color:var(--blue-dark);}
   .total-row td{font-weight:700;background:#f9fafb;}
   .badge.미완료{background:#fffbeb;color:var(--amber);}
   .summary-table{font-size:12px;white-space:nowrap;}
@@ -322,9 +324,8 @@
   });
   if(migratedBizTargets) saveData();
 
-  function getMonthLabels(){
-    const now = new Date();
-    const cur = now.getMonth()+1;
+  function getMonthLabelsFor(month){
+    const cur = monthIndexOf(month) + 1;
     const prev = cur === 1 ? 12 : cur-1;
     const next = cur === 12 ? 1 : cur+1;
     return { prev: `${prev}월`, cur: `${cur}월`, next: `${next}월` };
@@ -614,51 +615,52 @@
     `;
   }
 
+  function availableMonths(){
+    const set = new Set();
+    set.add(thisMonth);
+    let hasUnscheduled = false;
+    state.orders.forEach(o => {
+      const k = monthGroupKey(o.date);
+      if(k) set.add(k); else hasUnscheduled = true;
+    });
+    Object.keys(state.bizTargets).forEach(k => { if(/^\d{4}-\d{2}$/.test(k)) set.add(k); });
+    const months = [...set].sort((a,b) => b.localeCompare(a));
+    if(hasUnscheduled) months.push("");
+    return months;
+  }
+
+  function monthTabLabel(month){
+    return month ? `${Number(month.slice(5,7))}월` : "날짜 미정";
+  }
+
   function renderOrders(){
-    const monthOptions = Array.from({length:12}, (_,i) => {
-      const val = `2026-${String(i+1).padStart(2,"0")}`;
-      const selected = state.ordersMonthFilter === val ? "selected" : "";
-      return `<option value="${val}" ${selected}>${i+1}월</option>`;
-    }).join("");
+    const months = availableMonths();
+    if(state.summaryMonthTab === undefined || !months.includes(state.summaryMonthTab)){
+      state.summaryMonthTab = thisMonth;
+    }
+    const activeMonth = state.summaryMonthTab;
     return `
-      ${renderSummaryTable()}
+      <div class="panel" style="padding-bottom:12px;">
+        <div class="month-tabs">
+          ${months.map(mo => `<button class="month-tab-btn${mo===activeMonth?' active':''}" data-month-tab="${mo}">${monthTabLabel(mo)}</button>`).join("")}
+        </div>
+      </div>
+      ${renderSummaryTable(activeMonth)}
       <div class="panel">
         <div class="toolbar">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <label style="font-weight:600;font-size:14px;">월 선택</label>
-            <select id="ordersMonthFilter" style="width:auto;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;">
-              <option value="" ${state.ordersMonthFilter ? "" : "selected"}>전체</option>
-              ${monthOptions}
-            </select>
-          </div>
+          <div></div>
           <div style="display:flex;gap:8px;">
             <button class="ghost" id="btnAcctMatch">회계 데이터 반영</button>
             <button class="ghost" id="btnPasteOpen">엑셀에서 붙여넣기</button>
             <button class="primary" id="btnAddOrder">+ 신규수주 입력</button>
           </div>
         </div>
-        ${renderOrdersByMonth()}
+        <div class="order-grid">
+          ${BIZ_UNITS.map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === activeMonth))).join("")}
+        </div>
         <div class="sub" style="color:var(--muted);font-size:12px;margin-top:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
       </div>
     `;
-  }
-
-  function renderOrdersByMonth(){
-    let monthKeys;
-    if(state.ordersMonthFilter){
-      monthKeys = [state.ordersMonthFilter];
-    } else {
-      monthKeys = [...new Set(state.orders.map(o => monthGroupKey(o.date)))].sort((a,b)=>a.localeCompare(b));
-      if(monthKeys.length === 0){
-        monthKeys = [new Date().toISOString().slice(0,7)];
-      }
-    }
-    return monthKeys.map(key => `
-      <div class="month-group-title">${monthGroupLabel(key)}</div>
-      <div class="order-grid">
-        ${BIZ_UNITS.map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === key))).join("")}
-      </div>
-    `).join("");
   }
 
   function expectedRevenue(unit, month){
@@ -667,13 +669,13 @@
     return Number(t.actual||0) + sums.done + sums.pending;
   }
 
-  function renderSummaryTable(){
-    const m = getMonthLabels();
+  function renderSummaryTable(month){
+    const m = getMonthLabelsFor(month);
     const rows = BIZ_UNITS.map(u => {
-      const t = getBizTarget(thisMonth, u);
+      const t = getBizTarget(month, u);
       const sums = unitOrderSums(u);
-      const target = monthlyTargetByUnit(u, thisMonth);
-      const expected = expectedRevenue(u, thisMonth);
+      const target = monthlyTargetByUnit(u, month);
+      const expected = expectedRevenue(u, month);
       const rate = target > 0 ? (expected/target)*100 : 0;
       const cumulative = Number(t.prev||0) + expected + Number(t.nextPlanned||0);
       return { u, t, target, sums, expected, rate, cumulative };
@@ -718,15 +720,15 @@
             ${rows.map((r,i) => `
               <tr>
                 ${i===0 ? `<td rowspan="${BIZ_UNITS.length}" style="text-align:center;font-weight:700;">금액</td>` : ''}
-                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="prev" value="${r.t.prev||0}"></td>
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="prev" data-month="${month}" value="${r.t.prev||0}"></td>
                 <td class="biz-name">${r.u}</td>
                 <td>${fmtWon(r.target)}</td>
-                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="actual" value="${r.t.actual||0}"></td>
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="actual" data-month="${month}" value="${r.t.actual||0}"></td>
                 <td>${fmtWon(r.sums.done)}</td>
                 <td>${fmtWon(r.sums.pending)}</td>
                 <td>${fmtWon(r.expected)}</td>
                 <td>${r.target > 0 ? r.rate.toFixed(1)+'%' : '-'}</td>
-                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="nextPlanned" value="${r.t.nextPlanned||0}"></td>
+                <td><input type="text" inputmode="numeric" class="biz-input" data-biz="${r.u}" data-field="nextPlanned" data-month="${month}" value="${r.t.nextPlanned||0}"></td>
                 <td>${fmtWon(r.cumulative)}</td>
               </tr>
             `).join("")}
@@ -755,11 +757,6 @@
     return dateStr && dateStr.length >= 7 ? dateStr.slice(0,7) : "";
   }
 
-  function monthGroupLabel(key){
-    if(!key) return "날짜 미정";
-    const m = Number(key.slice(5,7));
-    return `${m}월 수주내역`;
-  }
 
   function renderOrderMonthTable(monthOrders){
     const total = monthOrders.reduce((s,o) => s + orderAmount(o), 0);
@@ -817,10 +814,6 @@
       state.selectedMonth = thisMonth;
       saveData(); render();
     });
-    document.getElementById("ordersMonthFilter")?.addEventListener("change", (e) => {
-      state.ordersMonthFilter = e.target.value;
-      saveData(); render();
-    });
     document.getElementById("btnAddDeal")?.addEventListener("click", () => openModal());
     document.querySelectorAll("[data-filter]").forEach(b=>{
       b.addEventListener("click", () => { dealFilter = b.dataset.filter; render(); });
@@ -860,8 +853,14 @@
       inp.addEventListener("change", () => {
         const unit = inp.dataset.biz;
         const field = inp.dataset.field;
-        const t = getBizTarget(thisMonth, unit);
+        const t = getBizTarget(inp.dataset.month, unit);
         t[field] = Number(inp.value.replace(/[^\d-]/g,""))||0;
+        saveData(); render();
+      });
+    });
+    document.querySelectorAll("[data-month-tab]").forEach(b=>{
+      b.addEventListener("click", () => {
+        state.summaryMonthTab = b.dataset.monthTab;
         saveData(); render();
       });
     });
