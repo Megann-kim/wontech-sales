@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>원텍영업관리</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --blue:#2563eb; --blue-dark:#1d4ed8; --bg:#f4f6f9; --card:#ffffff;
@@ -92,6 +93,7 @@
     <button data-view="deals">견적/수주</button>
     <button data-view="orders">수주관리</button>
   </nav>
+  <span id="cloudStatus" style="margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;"></span>
 </header>
 
 <main id="app"></main>
@@ -208,9 +210,14 @@
 </div>
 
 <script>
-(function(){
+(async function(){
   "use strict";
   const STORAGE_KEY = "wontech_sales_data";
+  const SB_URL = "https://wtterdpiipwhmwbmphgh.supabase.co";
+  const SB_KEY = "sb_publishable_fHpDKpMwZeV27EGgL7t8pw_p8jok21J";
+  const CACHE_KEY = "wontech_sales";
+  const _sb = supabase.createClient(SB_URL, SB_KEY);
+  let cloudOk = true;
 
   function loadData(){
     try{
@@ -219,8 +226,35 @@
     }catch(e){}
     return { deals: [], targets: {}, orders: [], bizTargets: {} };
   }
+  let saveTimer = null;
+  let saveSeq = 0;
   function saveData(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if(saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveRemoteNow, 400);
+  }
+  function saveRemoteNow(){
+    const mySeq = ++saveSeq;
+    const snapshot = JSON.parse(JSON.stringify(state));
+    _sb.from("wontech_cache").upsert({ key: CACHE_KEY, data: snapshot, updated_at: new Date().toISOString() })
+      .then(({error}) => {
+        if(mySeq !== saveSeq) return;
+        cloudOk = !error;
+        if(error) console.error("Supabase 저장 실패", error);
+        updateCloudStatus();
+      });
+  }
+  async function loadRemote(){
+    try{
+      const { data, error } = await _sb.from("wontech_cache").select("data").eq("key", CACHE_KEY).maybeSingle();
+      if(error){ cloudOk = false; console.error("Supabase 불러오기 실패", error); return null; }
+      return data ? data.data : null;
+    }catch(e){ cloudOk = false; console.error("Supabase 연결 실패", e); return null; }
+  }
+  function updateCloudStatus(){
+    const el = document.getElementById("cloudStatus");
+    if(el) el.textContent = cloudOk ? "☁ 실시간 저장됨" : "⚠ 저장 실패 (인터넷 연결 확인)";
+    if(el) el.style.color = cloudOk ? "var(--green)" : "var(--red)";
   }
 
   const BIZ_UNITS = ["국내영업-제품","국내영업-소모품","해외영업","Surgical","B2C","고객만족"];
@@ -324,6 +358,20 @@
     }
   });
   if(migratedBizTargets) saveData();
+
+  const remoteState = await loadRemote();
+  if(remoteState){
+    state = remoteState;
+    if(!state.deals) state.deals = [];
+    if(!state.targets) state.targets = {};
+    if(!state.orders) state.orders = [];
+    if(!state.bizTargets) state.bizTargets = {};
+    if(!state.selectedMonth) state.selectedMonth = thisMonth;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } else if(cloudOk){
+    saveData();
+  }
+  updateCloudStatus();
 
   function getMonthLabelsFor(month){
     const cur = monthIndexOf(month) + 1;
