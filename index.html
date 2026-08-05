@@ -18,7 +18,8 @@
   nav button{border:none;background:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--muted);font-weight:600;}
   nav button.active{background:var(--blue);color:#fff;}
   nav button:hover:not(.active){background:#eef2ff;}
-  .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+  .order-grid .order-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
   @media (max-width:700px){ .order-grid{grid-template-columns:1fr;} }
   .region-block{margin-bottom:0;min-width:0;}
   .region-block table{font-size:12px;}
@@ -656,7 +657,12 @@
           </div>
         </div>
         <div class="order-grid">
-          ${BIZ_UNITS.map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === activeMonth))).join("")}
+          <div class="order-col">
+            ${BIZ_UNITS.filter(u => u.startsWith("국내영업")).map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === activeMonth))).join("")}
+          </div>
+          <div class="order-col">
+            ${BIZ_UNITS.filter(u => !u.startsWith("국내영업")).map(u => renderOrderUnitBlock(u, state.orders.filter(o => o.region === u && monthGroupKey(o.date) === activeMonth))).join("")}
+          </div>
         </div>
         <div class="sub" style="color:var(--muted);font-size:12px;margin-top:12px;">※ 신규수주 발생 시 여기에 입력하고, 매출처리(납품 완료로 인식) 되면 해당 건을 삭제하세요.</div>
       </div>
